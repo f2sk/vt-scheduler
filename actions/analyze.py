@@ -11,9 +11,9 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
-GROQ_MODEL = "llama-3.3-70b-versatile"
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
 
 BASE_DIR = os.path.dirname(__file__)
 TWITTER_JSON = os.path.join(BASE_DIR, "twitter.json")
@@ -80,27 +80,24 @@ JSON以外のテキストは出力しないでください。
 
 def llm_analyze(prompt: str) -> str:
     payload = json.dumps({
-        "model": GROQ_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0,
-        "response_format": {"type": "json_object"},
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0,
+            "response_mime_type": "application/json",
+        },
     }).encode()
     req = urllib.request.Request(
-        GROQ_URL,
+        GEMINI_URL,
         data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "User-Agent": "python-requests/2.31.0",
-        },
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req) as res:
             data = json.loads(res.read())
-            return data["choices"][0]["message"]["content"]
+            return data["candidates"][0]["content"]["parts"][0]["text"]
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Groq API error {e.code}: {e.read().decode()}") from e
+        raise RuntimeError(f"Gemini API error {e.code}: {e.read().decode()}") from e
 
 
 def load_twitter() -> dict:
