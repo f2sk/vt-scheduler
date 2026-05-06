@@ -107,10 +107,10 @@ playwright install chromium
 
 ```bash
 # ① Twitterデータ取得
-ssh yusk@rp4 'cd ~/vt-scheduler && .venv/bin/python scrape_twitter.py'
+ssh <pi> 'cd ~/vt-scheduler && .venv/bin/python scrape_twitter.py'
 
 # ② data ブランチへ push
-ssh yusk@rp4 'cd ~/vt-scheduler && .venv/bin/python push_to_github.py'
+ssh <pi> 'cd ~/vt-scheduler && .venv/bin/python push_to_github.py'
 
 # ③ Actions 手動トリガー
 gh workflow run update.yml --repo f2sk/vt-scheduler
