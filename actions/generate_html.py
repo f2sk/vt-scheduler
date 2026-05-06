@@ -32,7 +32,7 @@ def render_schedule_rows(schedule: dict) -> str:
     rows = []
     for screen_name, info in schedule.items():
         has_stream = info.get("has_stream", False)
-        start_time = info.get("start_time") or "--:--"
+        start_time = info.get("start_datetime") or "--"
         title = info.get("title") or ""
         is_collab = info.get("is_collab", False)
         collab_note = info.get("collab_note") or ""
@@ -55,7 +55,7 @@ def render_schedule_rows(schedule: dict) -> str:
         rows.append(f"""      <tr>
         <td class="col-handle">@{esc(screen_name)}</td>
         <td class="col-status"><span class="{status_class}">{status_text}</span></td>
-        <td class="col-time">{esc(start_time)}</td>
+        <td class="col-time" style="white-space:nowrap">{esc(start_time)}</td>
         <td class="col-title">{title_cell}{collab_cell}</td>
         <td class="col-source">{esc(source)}</td>
       </tr>""")
@@ -82,6 +82,7 @@ def render_tweets(twitter_data: dict) -> str:
                 "screen_name": screen_name,
                 "datetime": dt,
                 "text": tw.get("text", ""),
+                "quoted_text": tw.get("quoted_text"),
                 "is_retweet": tw.get("is_retweet", False),
                 "url": tw.get("url"),
             })
@@ -103,9 +104,12 @@ def render_tweets(twitter_data: dict) -> str:
         else:
             time_part = f'<span class="tweet-time">{dt_label}</span>'
 
+        quoted = tw.get("quoted_text")
+        quoted_html = f'\n      <div class="tweet-quoted">{esc(re.sub(r"\n{{2,}}", "\n", quoted.strip()))}</div>' if quoted else ""
+
         items.append(f"""    <div class="tweet-item">
       <div class="tweet-meta">{time_part} <span class="tweet-handle">{handle}</span> {rt_mark}</div>
-      <div class="tweet-text">{text_escaped}</div>
+      <div class="tweet-text">{text_escaped}</div>{quoted_html}
     </div>""")
 
     return "\n".join(items)
@@ -226,6 +230,15 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
       word-break: break-word;
       line-height: 1.5;
     }}
+    .tweet-quoted {{
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-left: 2px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }}
     .no-tweets {{ color: var(--muted); font-size: 12px; padding: 8px 0; }}
 
     .footer {{
@@ -257,7 +270,7 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
         <tr>
           <th>handle</th>
           <th>status</th>
-          <th>time (jst)</th>
+          <th>date / time (jst)</th>
           <th>title / note</th>
           <th>src</th>
         </tr>

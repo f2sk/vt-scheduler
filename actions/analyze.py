@@ -9,7 +9,7 @@ import os
 import json
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 GROQ_MODEL = "llama-3.3-70b-versatile"
@@ -24,7 +24,10 @@ TWITTER_MAX_AGE_HOURS = 2
 
 PROMPT_TEMPLATE = """\
 以下はVTuberのツイートと、YouTubeの配信情報です。
-これらを分析して、今日・近日中の配信予定を構造化JSONで返してください。
+これらを分析して、直近・近日中の配信予定を構造化JSONで返してください。
+
+# 現在日時（JST）
+{current_datetime}
 
 # 分析対象VTuber
 - 音乃瀬奏 (@otonosekanade)
@@ -43,7 +46,7 @@ PROMPT_TEMPLATE = """\
 {{
   "otonosekanade": {{
     "has_stream": true/false,
-    "start_time": "HH:MM" または null,
+    "start_datetime": "MM/DD HH:MM" または null,
     "title": "YouTubeのtitleフィールドまたはツイート本文から抜いた配信タイトル（要約・翻訳せずそのままコピー）" または null,
     "is_collab": true/false,
     "collab_note": "コラボ相手・他枠出演の説明" または null,
@@ -56,13 +59,14 @@ PROMPT_TEMPLATE = """\
 ```
 
 # 判定ルール
-- has_stream: 今日または数時間以内に配信がある場合にtrue
-- start_time: 日本時間（JST, UTC+9）でHH:MM形式。不明な場合はnull
+- has_stream: 現在から72時間以内に配信予定がある場合にtrue（過去の配信はカウントしない）
+- 複数の配信予告がある場合は、現在時刻より未来で最も近いものを1件選ぶ
+- start_datetime: 日本時間（JST）でMM/DD HH:MM形式（例: 05/07 21:00）。不明な場合はnull
 - is_collab: 自分の枠ではなく他者の配信に出演する場合もtrue
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
 - titleはYouTubeデータのtitleフィールドをそのまま使う。YouTubeにない場合はツイート本文から配信タイトル部分を抜き出す
 - stream_urlはYouTubeのurlフィールドを優先し、なければツイート本文中のURLを使う
-- RTは他枠への出演告知として扱う
+- RTおよび引用RTは他枠への出演告知として扱う
 - フリーチャット枠（Free chat）は配信予定としてカウントしない
 - titleを要約・翻訳・改変しないこと
 
@@ -120,7 +124,11 @@ def main():
     twitter_text = json.dumps(twitter, ensure_ascii=False, indent=2) if twitter else "（データなし）"
     youtube_text = json.dumps(youtube.get("channels", {}), ensure_ascii=False, indent=2)
 
+    jst = timezone(timedelta(hours=9))
+    current_datetime = datetime.now(jst).strftime("%Y/%m/%d %H:%M JST")
+
     prompt = PROMPT_TEMPLATE.format(
+        current_datetime=current_datetime,
         twitter_data=twitter_text,
         youtube_data=youtube_text,
     )
@@ -146,7 +154,7 @@ def main():
 
     for sn, info in result.items():
         status = "配信あり" if info.get("has_stream") else "配信なし"
-        time_ = info.get("start_time") or "--:--"
+        time_ = info.get("start_datetime") or "--"
         title = (info.get("title") or "")[:30]
         print(f"  @{sn}: {status} {time_} {title}")
 

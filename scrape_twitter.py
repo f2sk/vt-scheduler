@@ -45,8 +45,10 @@ async def scrape_user(page, screen_name: str) -> list[dict]:
             if href and "/status/" in href:
                 url = href
 
-        text_el = await el.query_selector('[data-testid="tweetText"]')
-        text = await text_el.inner_text() if text_el else None
+        text_els = await el.query_selector_all('[data-testid="tweetText"]')
+        text = await text_els[0].inner_text() if text_els else None
+        # 引用RTの場合は2つ目のtweetTextが引用元テキスト
+        quoted_text = await text_els[1].inner_text() if len(text_els) > 1 else None
 
         if not text or text in seen:
             continue
@@ -58,6 +60,7 @@ async def scrape_user(page, screen_name: str) -> list[dict]:
         tweets.append({
             "datetime": dt,
             "text": text,
+            "quoted_text": quoted_text,
             "is_retweet": is_retweet,
             "url": url,
         })
