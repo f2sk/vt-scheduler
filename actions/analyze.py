@@ -115,13 +115,35 @@ def load_twitter() -> dict:
     return data.get("accounts", {})
 
 
+def dedup_lines(text: str) -> str:
+    """連続する重複行を1行に圧縮する（ねねちスタイル対策）"""
+    lines = text.splitlines()
+    result = []
+    for line in lines:
+        if not result or line != result[-1]:
+            result.append(line)
+    return "\n".join(result)
+
+
+def normalize_twitter(accounts: dict) -> dict:
+    """ツイート本文の重複行を圧縮して返す"""
+    normalized = {}
+    for sn, acct in accounts.items():
+        tweets = []
+        for t in acct.get("tweets", []):
+            tweets.append({**t, "text": dedup_lines(t.get("text", ""))})
+        normalized[sn] = {**acct, "tweets": tweets}
+    return normalized
+
+
 def main():
     twitter = load_twitter()
     with open(YOUTUBE_JSON, encoding="utf-8") as f:
         youtube = json.load(f)
 
-    # プロンプト用にデータを整形
-    twitter_text = json.dumps(twitter, ensure_ascii=False, indent=2) if twitter else "（データなし）"
+    # プロンプト用にデータを整形（重複行を圧縮）
+    twitter_normalized = normalize_twitter(twitter) if twitter else {}
+    twitter_text = json.dumps(twitter_normalized, ensure_ascii=False, indent=2) if twitter_normalized else "（データなし）"
     youtube_text = json.dumps(youtube.get("channels", {}), ensure_ascii=False, indent=2)
 
     jst = timezone(timedelta(hours=9))
