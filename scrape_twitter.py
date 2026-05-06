@@ -2,12 +2,16 @@
 # 監視対象アカウントの最新ツイートを取得してJSONで出力する
 # 実行方法: python3 scrape_twitter.py
 # 出力: twitter.json（GitHub Actionsが読み込む）
-# 依存: playwright (pip install playwright)
+# 依存: playwright, playwright-stealth (pip install playwright playwright-stealth)
 
 import asyncio
 import json
 import os
+import random
+import time
 from datetime import datetime, timezone, timedelta
+
+from playwright_stealth import stealth_async
 
 COOKIES_PATH = os.path.join(os.path.dirname(__file__), "cookies.json")
 OUTPUT_PATH  = os.path.join(os.path.dirname(__file__), "twitter.json")
@@ -19,10 +23,11 @@ TARGETS = [
     {"name": "しぐれうい", "screen_name": "ui_shig"},
 ]
 
-MAX_NEW_TWEETS = 50   # 1アカウント1回のスクレイプで取得する新ツイート上限
-MAX_SCROLLS    = 15   # スクロール上限
-STORE_KEEP_DAYS = 3   # ストアの保持期間（日）
-OUTPUT_HOURS   = 24   # twitter.jsonに出力するツイートの時間窓
+MAX_NEW_TWEETS  = 50   # 1アカウント1回のスクレイプで取得する新ツイート上限
+MAX_SCROLLS     = 15   # スクロール上限
+STORE_KEEP_DAYS = 3    # ストアの保持期間（日）
+OUTPUT_HOURS    = 24   # twitter.jsonに出力するツイートの時間窓
+RANDOM_DELAY_MAX = 600 # 起動時ランダム遅延の上限（秒）
 
 
 def load_store() -> dict:
@@ -48,7 +53,7 @@ async def scrape_new_tweets(page, screen_name: str, known_urls: set) -> list[dic
     await page.goto(f"https://x.com/{screen_name}", timeout=30000)
     try:
         await page.wait_for_selector('[data-testid="tweetText"]', timeout=15000)
-        await page.wait_for_timeout(2000)
+        await page.wait_for_timeout(random.randint(1500, 3500))
     except Exception:
         return []
 
@@ -96,13 +101,21 @@ async def scrape_new_tweets(page, screen_name: str, known_urls: set) -> list[dic
         hit = await collect_visible()
         if hit or len(new_tweets) >= MAX_NEW_TWEETS:
             break
-        await page.evaluate("window.scrollBy(0, 2000)")
-        await page.wait_for_timeout(1500)
+        # ランダムスクロール量・待機時間・マウス移動で人間らしい操作を模倣
+        scroll_amount = random.randint(600, 2400)
+        await page.evaluate(f"window.scrollBy(0, {scroll_amount})")
+        await page.mouse.move(random.randint(100, 900), random.randint(100, 600))
+        await page.wait_for_timeout(random.randint(1000, 2500))
 
     return new_tweets
 
 
 async def main():
+    # 起動タイミングをランダムにずらす（cronの固定間隔を隠蔽）
+    delay = random.randint(0, RANDOM_DELAY_MAX)
+    print(f"起動遅延: {delay}秒")
+    await asyncio.sleep(delay)
+
     with open(COOKIES_PATH) as f:
         cookies = json.load(f)
 
@@ -114,11 +127,13 @@ async def main():
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
+        # Linux x86_64 Chrome UA（ラズパイのARMと完全一致はしないが最も一般的なLinux UA）
         ctx = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         )
         await ctx.add_cookies(cookies)
         page = await ctx.new_page()
+        await stealth_async(page)  # navigator.webdriver等のbot検知シグナルを無効化
 
         for target in TARGETS:
             sn = target["screen_name"]
