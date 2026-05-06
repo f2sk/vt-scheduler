@@ -1,4 +1,4 @@
-# Twitterスクレイピングスクリプト
+﻿# Twitterスクレイピングスクリプト
 # 監視対象アカウントの最新ツイートを取得してJSONで出力する
 # 実行方法: python3 scrape_twitter.py
 # 出力: twitter.json（GitHub Actionsが読み込む）
@@ -18,7 +18,6 @@ TARGETS = [
     {"name": "しぐれうい", "screen_name": "ui_shig"},
 ]
 
-# 取得するツイート数上限
 MAX_TWEETS = 10
 
 
@@ -28,7 +27,6 @@ async def scrape_user(page, screen_name: str) -> list[dict]:
         await page.wait_for_selector('[data-testid="tweetText"]', timeout=15000)
         await page.wait_for_timeout(3000)
     except Exception:
-        # ツイートが表示されない場合は空リストを返す
         return []
 
     # スクロール前に取得する（スクロールすると仮想DOMで上部が消える）
@@ -39,6 +37,14 @@ async def scrape_user(page, screen_name: str) -> list[dict]:
     for el in tweet_els[:MAX_TWEETS]:
         time_el = await el.query_selector("time")
         dt = await time_el.get_attribute("datetime") if time_el else None
+
+        # timeタグの親<a>のhrefがツイートのパーマリンク
+        url = None
+        if time_el:
+            href = await time_el.evaluate("el => el.closest('a')?.href")
+            if href and "/status/" in href:
+                url = href
+
         text_el = await el.query_selector('[data-testid="tweetText"]')
         text = await text_el.inner_text() if text_el else None
 
@@ -46,7 +52,6 @@ async def scrape_user(page, screen_name: str) -> list[dict]:
             continue
         seen.add(text)
 
-        # リツイートかどうか
         social_el = await el.query_selector('[data-testid="socialContext"]')
         is_retweet = social_el is not None
 
@@ -54,6 +59,7 @@ async def scrape_user(page, screen_name: str) -> list[dict]:
             "datetime": dt,
             "text": text,
             "is_retweet": is_retweet,
+            "url": url,
         })
 
     return tweets
@@ -102,7 +108,7 @@ async def main():
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
-    print(f"\n保存完了: {OUTPUT_PATH}")
+    print(f"保存完了: {OUTPUT_PATH}")
 
 
 asyncio.run(main())

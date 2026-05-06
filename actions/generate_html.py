@@ -1,8 +1,8 @@
-# schedule.jsonからGitHub Pages用HTMLを生成するスクリプト
+# schedule.json と twitter.json から GitHub Pages 用 HTML を生成するスクリプト
 # GitHub Actionsから実行する
 # 実行方法: python3 generate_html.py
 # 環境変数: なし
-# 入力: schedule.json
+# 入力: schedule.json, twitter.json (任意)
 # 出力: index.html
 
 import os
@@ -11,63 +11,112 @@ from datetime import datetime, timezone, timedelta
 
 BASE_DIR = os.path.dirname(__file__)
 SCHEDULE_JSON = os.path.join(BASE_DIR, "schedule.json")
+TWITTER_JSON = os.path.join(BASE_DIR, "twitter.json")
 OUTPUT_HTML = os.path.join(BASE_DIR, "index.html")
 
 JST = timezone(timedelta(hours=9))
-
-DISPLAY_NAMES = {
-    "otonosekanade": "otonosekanade",
-    "momosuzunene":  "momosuzunene",
-    "ui_shig":       "ui_shig",
-}
+TWEET_MAX_AGE_HOURS = 24
 
 
-def format_analyzed_at(iso: str) -> str:
+def esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def format_dt_jst(iso: str) -> str:
     dt = datetime.fromisoformat(iso).astimezone(JST)
-    return dt.strftime("%Y-%m-%d %H:%M JST")
+    return dt.strftime("%m/%d %H:%M")
 
 
-def render_row(screen_name: str, info: dict) -> str:
-    handle = DISPLAY_NAMES.get(screen_name, screen_name)
-    has_stream = info.get("has_stream", False)
-    start_time = info.get("start_time") or "--:--"
-    title = info.get("title") or ""
-    is_collab = info.get("is_collab", False)
-    collab_note = info.get("collab_note") or ""
-    source = info.get("source", "none")
-    youtube_url = info.get("youtube_url")
+def render_schedule_rows(schedule: dict) -> str:
+    rows = []
+    for screen_name, info in schedule.items():
+        has_stream = info.get("has_stream", False)
+        start_time = info.get("start_time") or "--:--"
+        title = info.get("title") or ""
+        is_collab = info.get("is_collab", False)
+        collab_note = info.get("collab_note") or ""
+        source = info.get("source", "none")
+        youtube_url = info.get("youtube_url")
 
-    if has_stream:
-        status_class = "status-collab" if is_collab else "status-live"
-        status_text = "COLLAB" if is_collab else "LIVE"
-    else:
-        status_class = "status-none"
-        status_text = "NO STREAM"
+        if has_stream:
+            status_class = "status-collab" if is_collab else "status-live"
+            status_text = "COLLAB" if is_collab else "LIVE"
+        else:
+            status_class = "status-none"
+            status_text = "NO STREAM"
 
-    title_escaped = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    collab_escaped = collab_note.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        title_cell = esc(title)
+        if youtube_url and has_stream:
+            title_cell = f'<a href="{esc(youtube_url)}" target="_blank">{esc(title)}</a>'
 
-    title_cell = title_escaped
-    if youtube_url and has_stream:
-        url_escaped = youtube_url.replace("&", "&amp;")
-        title_cell = f'<a href="{url_escaped}" target="_blank">{title_escaped}</a>'
+        collab_cell = f' <span class="collab-note">{esc(collab_note)}</span>' if collab_note else ""
 
-    collab_cell = f'<span class="collab-note">{collab_escaped}</span>' if collab_note else ""
-
-    return f"""      <tr>
-        <td class="col-handle">@{handle}</td>
+        rows.append(f"""      <tr>
+        <td class="col-handle">@{esc(screen_name)}</td>
         <td class="col-status"><span class="{status_class}">{status_text}</span></td>
-        <td class="col-time">{start_time}</td>
-        <td class="col-title">{title_cell} {collab_cell}</td>
-        <td class="col-source">{source}</td>
-      </tr>"""
+        <td class="col-time">{esc(start_time)}</td>
+        <td class="col-title">{title_cell}{collab_cell}</td>
+        <td class="col-source">{esc(source)}</td>
+      </tr>""")
+    return "\n".join(rows)
 
 
-def generate(schedule_data: dict) -> str:
-    analyzed_at = format_analyzed_at(schedule_data.get("analyzed_at", datetime.now(timezone.utc).isoformat()))
+def render_tweets(twitter_data: dict) -> str:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=TWEET_MAX_AGE_HOURS)
+
+    all_tweets = []
+    for screen_name, acct in twitter_data.get("accounts", {}).items():
+        for tw in acct.get("tweets", []):
+            dt_str = tw.get("datetime")
+            if not dt_str:
+                continue
+            try:
+                dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if dt < cutoff:
+                continue
+            all_tweets.append({
+                "screen_name": screen_name,
+                "datetime": dt,
+                "text": tw.get("text", ""),
+                "is_retweet": tw.get("is_retweet", False),
+                "url": tw.get("url"),
+            })
+
+    if not all_tweets:
+        return '<p class="no-tweets">（過去24時間のツイートなし）</p>'
+
+    all_tweets.sort(key=lambda t: t["datetime"], reverse=True)
+
+    items = []
+    for tw in all_tweets:
+        dt_label = format_dt_jst(tw["datetime"].isoformat())
+        rt_mark = '<span class="rt-mark">RT</span> ' if tw["is_retweet"] else ""
+        text_escaped = esc(tw["text"])
+        handle = f'@{esc(tw["screen_name"])}'
+
+        if tw["url"]:
+            time_part = f'<a href="{esc(tw["url"])}" target="_blank" class="tweet-time">{dt_label}</a>'
+        else:
+            time_part = f'<span class="tweet-time">{dt_label}</span>'
+
+        items.append(f"""    <div class="tweet-item">
+      <div class="tweet-meta">{time_part} <span class="tweet-handle">{handle}</span> {rt_mark}</div>
+      <div class="tweet-text">{text_escaped}</div>
+    </div>""")
+
+    return "\n".join(items)
+
+
+def generate(schedule_data: dict, twitter_data: dict) -> str:
+    analyzed_at_iso = schedule_data.get("analyzed_at", datetime.now(timezone.utc).isoformat())
+    analyzed_at = datetime.fromisoformat(analyzed_at_iso).astimezone(JST).strftime("%Y-%m-%d %H:%M JST")
     schedule = schedule_data.get("schedule", {})
 
-    rows = "\n".join(render_row(sn, info) for sn, info in schedule.items())
+    rows = render_schedule_rows(schedule)
+    tweets_html = render_tweets(twitter_data)
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -84,9 +133,7 @@ def generate(schedule_data: dict) -> str:
       --text: #c9d1d9;
       --muted: #8b949e;
       --green: #3fb950;
-      --yellow: #d29922;
       --blue: #58a6ff;
-      --red: #f85149;
       --purple: #bc8cff;
       --font: 'Courier New', 'Consolas', monospace;
     }}
@@ -97,77 +144,95 @@ def generate(schedule_data: dict) -> str:
       font-family: var(--font);
       font-size: 13px;
       min-height: 100vh;
-      padding: 24px;
+      padding: 16px;
     }}
     .header {{
       border-bottom: 1px solid var(--border);
-      padding-bottom: 12px;
-      margin-bottom: 20px;
+      padding-bottom: 10px;
+      margin-bottom: 16px;
     }}
-    .header-top {{
-      display: flex;
-      align-items: baseline;
-      gap: 16px;
-    }}
-    .title {{
-      font-size: 15px;
-      font-weight: bold;
-      color: var(--blue);
-    }}
-    .subtitle {{
-      color: var(--muted);
-      font-size: 12px;
-    }}
-    .meta {{
-      margin-top: 6px;
-      color: var(--muted);
-      font-size: 11px;
-    }}
+    .title {{ font-size: 14px; font-weight: bold; color: var(--blue); }}
+    .meta {{ margin-top: 4px; color: var(--muted); font-size: 11px; }}
     .meta span {{ color: var(--text); }}
+
+    /* スケジュールテーブル */
+    .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
     table {{
       width: 100%;
       border-collapse: collapse;
-      max-width: 900px;
+      min-width: 480px;
     }}
-    thead tr {{
-      border-bottom: 1px solid var(--border);
-    }}
+    thead tr {{ border-bottom: 1px solid var(--border); }}
     th {{
       text-align: left;
-      padding: 6px 12px;
+      padding: 5px 10px;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: normal;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      white-space: nowrap;
     }}
     td {{
-      padding: 8px 12px;
+      padding: 7px 10px;
       border-bottom: 1px solid var(--border);
       vertical-align: middle;
     }}
     tr:last-child td {{ border-bottom: none; }}
-    tr:hover td {{ background: var(--bg2); }}
-    .col-handle {{ color: var(--blue); width: 180px; }}
-    .col-status {{ width: 110px; }}
-    .col-time {{ width: 70px; font-variant-numeric: tabular-nums; }}
-    .col-source {{ color: var(--muted); width: 80px; font-size: 11px; }}
+    .col-handle {{ color: var(--blue); white-space: nowrap; }}
+    .col-status {{ white-space: nowrap; }}
+    .col-time {{ white-space: nowrap; font-variant-numeric: tabular-nums; }}
+    .col-source {{ color: var(--muted); font-size: 11px; white-space: nowrap; }}
     .col-title a {{ color: var(--text); text-decoration: none; }}
     .col-title a:hover {{ color: var(--blue); text-decoration: underline; }}
     .status-live   {{ color: var(--green);  }}
     .status-collab {{ color: var(--purple); }}
     .status-none   {{ color: var(--muted);  }}
-    .collab-note {{
-      color: var(--muted);
+    .collab-note {{ color: var(--muted); font-size: 11px; }}
+
+    /* ツイートセクション */
+    .section-title {{
       font-size: 11px;
-      margin-left: 8px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 24px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
     }}
+    .tweet-item {{
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }}
+    .tweet-item:last-child {{ border-bottom: none; }}
+    .tweet-meta {{
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }}
+    .tweet-time {{ color: var(--muted); text-decoration: none; }}
+    .tweet-time:hover {{ color: var(--blue); }}
+    .tweet-handle {{ color: var(--blue); }}
+    .rt-mark {{
+      background: #21262d;
+      color: var(--muted);
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }}
+    .tweet-text {{
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }}
+    .no-tweets {{ color: var(--muted); font-size: 12px; padding: 8px 0; }}
+
     .footer {{
-      margin-top: 24px;
+      margin-top: 20px;
       color: var(--muted);
       font-size: 11px;
       border-top: 1px solid var(--border);
-      padding-top: 12px;
+      padding-top: 10px;
     }}
     .dot {{
       display: inline-block;
@@ -181,30 +246,34 @@ def generate(schedule_data: dict) -> str:
 </head>
 <body>
   <div class="header">
-    <div class="header-top">
-      <span class="title">&#x25a0; stream-monitor</span>
-      <span class="subtitle">// vtuber schedule dashboard</span>
-    </div>
+    <div class="title">&#x25a0; stream-monitor</div>
     <div class="meta">last updated: <span>{analyzed_at}</span></div>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>handle</th>
-        <th>status</th>
-        <th>time (jst)</th>
-        <th>title / note</th>
-        <th>source</th>
-      </tr>
-    </thead>
-    <tbody>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>handle</th>
+          <th>status</th>
+          <th>time (jst)</th>
+          <th>title / note</th>
+          <th>src</th>
+        </tr>
+      </thead>
+      <tbody>
 {rows}
-    </tbody>
-  </table>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title">recent tweets (24h)</div>
+  <div class="tweets">
+{tweets_html}
+  </div>
 
   <div class="footer">
-    <span class="dot"></span>auto-refresh every 30 min &nbsp;|&nbsp; data: youtube api + twitter scrape + llm analysis
+    <span class="dot"></span>auto-refresh every 30 min
   </div>
 </body>
 </html>"""
@@ -212,9 +281,14 @@ def generate(schedule_data: dict) -> str:
 
 def main():
     with open(SCHEDULE_JSON, encoding="utf-8") as f:
-        data = json.load(f)
+        schedule_data = json.load(f)
 
-    html = generate(data)
+    twitter_data = {}
+    if os.path.exists(TWITTER_JSON):
+        with open(TWITTER_JSON, encoding="utf-8") as f:
+            twitter_data = json.load(f)
+
+    html = generate(schedule_data, twitter_data)
 
     with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
         f.write(html)
