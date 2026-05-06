@@ -52,6 +52,15 @@ jobs:
       - name: Generate HTML
         run: python actions/generate_html.py
 
+      - name: Install Calendar dependencies
+        run: pip install google-api-python-client google-auth
+
+      - name: Update Google Calendar
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+        run: python actions/update_calendar.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
