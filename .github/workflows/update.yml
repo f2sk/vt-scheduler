@@ -1,0 +1,65 @@
+name: Update Stream Schedule
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # 30分ごと
+  workflow_dispatch:           # 手動実行
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+
+      - name: Fetch twitter.json from data branch
+        run: |
+          git fetch origin data:data 2>/dev/null || true
+          if git show data:twitter.json > actions/twitter.json 2>/dev/null; then
+            echo "twitter.json loaded"
+          else
+            echo "twitter.json not found, skipping"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch YouTube data
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: python actions/fetch_youtube.py
+
+      - name: Analyze with LLM
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python actions/analyze.py
+
+      - name: Generate HTML
+        run: python actions/generate_html.py
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: actions/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

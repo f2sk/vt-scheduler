@@ -1,6 +1,11 @@
 *.env
+.env
 cookies.json
 .venv/
 __pycache__/
 *.pyc
-
+twitter.json
+actions/twitter.json
+actions/youtube.json
+actions/schedule.json
+actions/index.html

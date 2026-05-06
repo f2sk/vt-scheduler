@@ -95,7 +95,7 @@ def llm_analyze(prompt: str) -> str:
 def load_twitter() -> dict:
     if not os.path.exists(TWITTER_JSON):
         return {}
-    with open(TWITTER_JSON) as f:
+    with open(TWITTER_JSON, encoding="utf-8") as f:
         data = json.load(f)
 
     # 古いデータはスキップ
