@@ -17,7 +17,7 @@ Raspberry Pi (ローカル)          GitHub
 ──────────────────────          ──────────────────────────────────────
 scrape_twitter.py               Actions: update.yml (30分ごと)
   └─ Playwright + cookies         ├─ fetch_youtube.py   (YouTube Data API)
-  └─ tweet_store.json に蓄積      ├─ analyze.py         (Groq LLM)
+  └─ tweet_store.json に蓄積      ├─ analyze.py         (Gemini 2.5 Flash)
   └─ twitter.json 生成            │    └─ twitter.json + youtube.json
 push_to_github.py               │         → schedule.json (streams配列)
   └─ data ブランチへ force push   ├─ generate_html.py   → GitHub Pages
@@ -33,7 +33,7 @@ Twitterスクレイピングのみラズパイで実行し、YouTube取得・LLM
 | `scrape_twitter.py` | Raspberry Pi | Playwright でツイートを取得し `tweet_store.json` に蓄積、`twitter.json` を生成 |
 | `push_to_github.py` | Raspberry Pi | `twitter.json` を `data` ブランチへ履歴なしで force push |
 | `actions/fetch_youtube.py` | GitHub Actions | YouTube Data API で live/upcoming 動画を取得し `youtube.json` を生成 |
-| `actions/analyze.py` | GitHub Actions | Groq LLM (llama-3.3-70b) で全配信を `streams` 配列として構造化 |
+| `actions/analyze.py` | GitHub Actions | Gemini 2.5 Flash で全配信を `streams` 配列として構造化 |
 | `actions/generate_html.py` | GitHub Actions | `schedule.json` + `twitter.json` から `index.html` を生成 |
 | `actions/update_calendar.py` | GitHub Actions | `schedule.json` の全配信を Google Calendar に登録・更新・削除 |
 
@@ -41,7 +41,7 @@ Twitterスクレイピングのみラズパイで実行し、YouTube取得・LLM
 
 1. ラズパイが30分ごと（毎時25・55分）にTwitterをスクレイピング → `twitter.json` を data ブランチへ push
 2. cron-job.org が毎時00・30分に Actions をトリガー
-3. Actions が YouTube API + Groq LLM で解析 → `schedule.json`（VTuberごとの `streams` 配列）を生成
+3. Actions が YouTube API + Gemini 2.5 Flash で解析 → `schedule.json`（VTuberごとの `streams` 配列）を生成
 4. `index.html` を生成して GitHub Pages へデプロイ
 5. Google Calendar に配信予定を登録（同一配信は `screen_name + start_datetime` から生成したIDで冪等管理）
 
@@ -74,7 +74,7 @@ Twitterスクレイピングのみラズパイで実行し、YouTube取得・LLM
 | シークレット名 | 内容 |
 |---|---|
 | `YOUTUBE_API_KEY` | YouTube Data API v3 キー |
-| `GROQ_API_KEY` | Groq API キー |
+| `GEMINI_API_KEY` | Google AI Studio の Gemini API キー |
 | `GOOGLE_CREDENTIALS_JSON` | Google サービスアカウントの JSON キー（文字列） |
 | `GOOGLE_CALENDAR_ID` | 登録先 Google Calendar の ID |
 
