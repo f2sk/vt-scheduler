@@ -79,7 +79,7 @@ def build_event(screen_name: str, info: dict, today: datetime) -> dict:
 
 
 def main():
-    creds_json = os.environ["GOOGLE_CREDENTIALS_JSON"]
+    creds_json = os.environ["GOOGLE_CREDENTIALS_JSON"].lstrip("﻿")
     creds_info = json.loads(creds_json)
     creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     service = build("calendar", "v3", credentials=creds)
