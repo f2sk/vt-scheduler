@@ -6,6 +6,7 @@
 # 出力: index.html
 
 import os
+import re
 import json
 from datetime import datetime, timezone, timedelta
 
@@ -94,7 +95,7 @@ def render_tweets(twitter_data: dict) -> str:
     for tw in all_tweets:
         dt_label = format_dt_jst(tw["datetime"].isoformat())
         rt_mark = '<span class="rt-mark">RT</span> ' if tw["is_retweet"] else ""
-        text_escaped = esc(tw["text"])
+        text_escaped = esc(re.sub(r'\n{2,}', '\n', tw["text"].strip()))
         handle = f'@{esc(tw["screen_name"])}'
 
         if tw["url"]:
