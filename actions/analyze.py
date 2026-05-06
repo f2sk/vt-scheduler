@@ -41,26 +41,29 @@ PROMPT_TEMPLATE = """\
 {youtube_data}
 
 # 出力形式（JSON）
-各VTuberについて以下を出力してください。
+各VTuberについて検出された配信をすべてstreams配列に含めてください。
 ```json
 {{
   "otonosekanade": {{
-    "has_stream": true/false,
-    "start_datetime": "MM/DD HH:MM" または null,
-    "title": "YouTubeのtitleフィールドまたはツイート本文から抜いた配信タイトル（要約・翻訳せずそのままコピー）" または null,
-    "is_collab": true/false,
-    "collab_note": "コラボ相手・他枠出演の説明" または null,
-    "source": "twitter" / "youtube" / "both",
-    "stream_url": "配信URL（YouTubeのURL優先、なければツイート内のURL）" または null
+    "streams": [
+      {{
+        "start_datetime": "MM/DD HH:MM" または null,
+        "title": "YouTubeのtitleフィールドまたはツイート本文から抜いた配信タイトル（要約・翻訳せずそのままコピー）" または null,
+        "is_collab": true/false,
+        "collab_note": "コラボ相手・他枠出演の説明" または null,
+        "source": "twitter" / "youtube" / "both",
+        "stream_url": "配信URL（YouTubeのURL優先、なければツイート内のURL）" または null
+      }}
+    ]
   }},
-  "momosuzunene": {{ ... }},
-  "ui_shig": {{ ... }}
+  "momosuzunene": {{ "streams": [ ... ] }},
+  "ui_shig": {{ "streams": [ ... ] }}
 }}
 ```
 
 # 判定ルール
-- has_stream: 現在から72時間以内に配信予定がある場合にtrue（過去の配信はカウントしない）
-- 複数の配信予告がある場合は、現在時刻より未来で最も近いものを1件選ぶ
+- streams: 現在から72時間以内の配信予定をすべて列挙する（複数あればすべて含める）。過去の配信はカウントしない
+- streams配列はstart_datetimeの昇順（早い順）で並べる
 - start_datetime: 日本時間（JST）でMM/DD HH:MM形式（例: 05/07 21:00）。不明な場合はnull
 - is_collab: 自分の枠ではなく他者の配信に出演する場合もtrue
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
@@ -69,6 +72,7 @@ PROMPT_TEMPLATE = """\
 - RTおよび引用RTは他枠への出演告知として扱う
 - フリーチャット枠（Free chat）は配信予定としてカウントしない
 - titleを要約・翻訳・改変しないこと
+- 配信が検出されない場合はstreams配列を空にする
 
 JSON以外のテキストは出力しないでください。
 """
@@ -175,10 +179,15 @@ def main():
     print(f"保存完了: {OUTPUT_JSON}")
 
     for sn, info in result.items():
-        status = "配信あり" if info.get("has_stream") else "配信なし"
-        time_ = info.get("start_datetime") or "--"
-        title = (info.get("title") or "")[:30]
-        print(f"  @{sn}: {status} {time_} {title}")
+        streams = info.get("streams", [])
+        if streams:
+            for s in streams:
+                t = (s.get("start_datetime") or "--")
+                title = (s.get("title") or "")[:30]
+                collab = " [collab]" if s.get("is_collab") else ""
+                print(f"  @{sn}: {t} {title}{collab}")
+        else:
+            print(f"  @{sn}: 配信なし")
 
 
 main()

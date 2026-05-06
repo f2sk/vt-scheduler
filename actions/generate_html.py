@@ -28,35 +28,72 @@ def format_dt_jst(iso: str) -> str:
     return dt.strftime("%m/%d %H:%M")
 
 
-def render_schedule_rows(schedule: dict) -> str:
+def pick_primary_stream(streams: list, now_jst: datetime, year: int) -> dict | None:
+    """現在時刻に最も近い未来の配信を返す。なければNone"""
+    future = []
+    for s in streams:
+        dt_str = s.get("start_datetime")
+        if not dt_str:
+            future.append((None, s))
+            continue
+        try:
+            mm, dd, hh, mi = int(dt_str[0:2]), int(dt_str[3:5]), int(dt_str[6:8]), int(dt_str[9:11])
+            dt = datetime(year, mm, dd, hh, mi, tzinfo=JST)
+            future.append((dt, s))
+        except Exception:
+            future.append((None, s))
+    # 未来のものを優先、同じなら早い順
+    future_only = [(dt, s) for dt, s in future if dt and dt >= now_jst]
+    if future_only:
+        return min(future_only, key=lambda x: x[0])[1]
+    # 未来がなければ最も直近の過去
+    past = [(dt, s) for dt, s in future if dt]
+    if past:
+        return max(past, key=lambda x: x[0])[1]
+    return future[0][1] if future else None
+
+
+def render_stream_cell(s: dict) -> str:
+    title = s.get("title") or ""
+    stream_url = s.get("stream_url")
+    collab_note = s.get("collab_note") or ""
+    title_cell = esc(title)
+    if stream_url:
+        title_cell = f'<a href="{esc(stream_url)}" target="_blank">{esc(title)}</a>'
+    collab_cell = f' <span class="collab-note">{esc(collab_note)}</span>' if collab_note else ""
+    return f"{title_cell}{collab_cell}"
+
+
+def render_schedule_rows(schedule: dict, analyzed_at_iso: str) -> str:
+    now_jst = datetime.fromisoformat(analyzed_at_iso).astimezone(JST)
+    year = now_jst.year
     rows = []
     for screen_name, info in schedule.items():
-        has_stream = info.get("has_stream", False)
-        start_time = info.get("start_datetime") or "--"
-        title = info.get("title") or ""
-        is_collab = info.get("is_collab", False)
-        collab_note = info.get("collab_note") or ""
-        source = info.get("source") or "none"
-        youtube_url = info.get("stream_url")
+        streams = info.get("streams", [])
+        primary = pick_primary_stream(streams, now_jst, year) if streams else None
 
-        if has_stream:
+        if primary:
+            is_collab = primary.get("is_collab", False)
             status_class = "status-collab" if is_collab else "status-live"
             status_text = "COLLAB" if is_collab else "LIVE"
+            start_time = primary.get("start_datetime") or "--"
+            source = primary.get("source") or "none"
+            title_html = render_stream_cell(primary)
+            # 複数配信がある場合は件数バッジを付ける
+            extra = f' <span class="extra-streams">+{len(streams)-1}</span>' if len(streams) > 1 else ""
         else:
             status_class = "status-none"
             status_text = "NO STREAM"
-
-        title_cell = esc(title)
-        if youtube_url and has_stream:
-            title_cell = f'<a href="{esc(youtube_url)}" target="_blank">{esc(title)}</a>'
-
-        collab_cell = f' <span class="collab-note">{esc(collab_note)}</span>' if collab_note else ""
+            start_time = "--"
+            source = "none"
+            title_html = ""
+            extra = ""
 
         rows.append(f"""      <tr>
         <td class="col-handle">@{esc(screen_name)}</td>
         <td class="col-status"><span class="{status_class}">{status_text}</span></td>
         <td class="col-time" style="white-space:nowrap">{esc(start_time)}</td>
-        <td class="col-title">{title_cell}{collab_cell}</td>
+        <td class="col-title">{title_html}{extra}</td>
         <td class="col-source">{esc(source)}</td>
       </tr>""")
     return "\n".join(rows)
@@ -120,7 +157,7 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
     analyzed_at = datetime.fromisoformat(analyzed_at_iso).astimezone(JST).strftime("%Y-%m-%d %H:%M JST")
     schedule = schedule_data.get("schedule", {})
 
-    rows = render_schedule_rows(schedule)
+    rows = render_schedule_rows(schedule, analyzed_at_iso)
     tweets_html = render_tweets(twitter_data)
 
     return f"""<!DOCTYPE html>
@@ -194,6 +231,14 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
     .status-collab {{ color: var(--purple); }}
     .status-none   {{ color: var(--muted);  }}
     .collab-note {{ color: var(--muted); font-size: 11px; }}
+    .extra-streams {{
+      background: #21262d;
+      color: var(--muted);
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 6px;
+    }}
 
     /* ツイートセクション */
     .section-title {{
