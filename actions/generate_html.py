@@ -37,7 +37,7 @@ def render_schedule_rows(schedule: dict) -> str:
         is_collab = info.get("is_collab", False)
         collab_note = info.get("collab_note") or ""
         source = info.get("source", "none")
-        youtube_url = info.get("youtube_url")
+        youtube_url = info.get("stream_url")
 
         if has_stream:
             status_class = "status-collab" if is_collab else "status-live"

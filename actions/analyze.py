@@ -48,7 +48,7 @@ PROMPT_TEMPLATE = """\
     "is_collab": true/false,
     "collab_note": "コラボ相手・他枠出演の説明" または null,
     "source": "twitter" / "youtube" / "both",
-    "youtube_url": "YouTubeのURL" または null
+    "stream_url": "配信URL（YouTubeのURL優先、なければツイート内のURL）" または null
   }},
   "momosuzunene": {{ ... }},
   "ui_shig": {{ ... }}
@@ -61,6 +61,7 @@ PROMPT_TEMPLATE = """\
 - is_collab: 自分の枠ではなく他者の配信に出演する場合もtrue
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
 - titleはYouTubeデータのtitleフィールドをそのまま使う。YouTubeにない場合はツイート本文から配信タイトル部分を抜き出す
+- stream_urlはYouTubeのurlフィールドを優先し、なければツイート本文中のURLを使う
 - RTは他枠への出演告知として扱う
 - フリーチャット枠（Free chat）は配信予定としてカウントしない
 - titleを要約・翻訳・改変しないこと
