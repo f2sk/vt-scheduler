@@ -36,7 +36,7 @@ def render_schedule_rows(schedule: dict) -> str:
         title = info.get("title") or ""
         is_collab = info.get("is_collab", False)
         collab_note = info.get("collab_note") or ""
-        source = info.get("source", "none")
+        source = info.get("source") or "none"
         youtube_url = info.get("stream_url")
 
         if has_stream:
