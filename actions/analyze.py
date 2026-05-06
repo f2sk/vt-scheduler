@@ -44,7 +44,7 @@ PROMPT_TEMPLATE = """\
   "otonosekanade": {{
     "has_stream": true/false,
     "start_time": "HH:MM" または null,
-    "title": "配信タイトルまたは内容の要約" または null,
+    "title": "YouTubeのtitleフィールドまたはツイート本文から抜いた配信タイトル（要約・翻訳せずそのままコピー）" または null,
     "is_collab": true/false,
     "collab_note": "コラボ相手・他枠出演の説明" または null,
     "source": "twitter" / "youtube" / "both",
@@ -60,8 +60,10 @@ PROMPT_TEMPLATE = """\
 - start_time: 日本時間（JST, UTC+9）でHH:MM形式。不明な場合はnull
 - is_collab: 自分の枠ではなく他者の配信に出演する場合もtrue
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
+- titleはYouTubeデータのtitleフィールドをそのまま使う。YouTubeにない場合はツイート本文から配信タイトル部分を抜き出す
 - RTは他枠への出演告知として扱う
 - フリーチャット枠（Free chat）は配信予定としてカウントしない
+- titleを要約・翻訳・改変しないこと
 
 JSON以外のテキストは出力しないでください。
 """
