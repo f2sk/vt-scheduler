@@ -198,7 +198,7 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
     .meta span {{ color: var(--text); }}
 
     /* スケジュールテーブル */
-    .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+    .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }}
     table {{
       width: 100%;
       border-collapse: collapse;
