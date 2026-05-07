@@ -144,7 +144,7 @@ def render_tweets(twitter_data: dict) -> str:
         quoted = tw.get("quoted_text")
         quoted_html = f'\n      <div class="tweet-quoted">{esc(re.sub(r"\n{{2,}}", "\n", quoted.strip()))}</div>' if quoted else ""
 
-        items.append(f"""    <div class="tweet-item">
+        items.append(f"""    <div class="tweet-item" data-account="{esc(tw['screen_name'])}">
       <div class="tweet-meta">{time_part} <span class="tweet-handle">{handle}</span> {rt_mark}</div>
       <div class="tweet-text">{text_escaped}</div>{quoted_html}
     </div>""")
@@ -246,9 +246,28 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      margin: 24px 0 10px;
+      margin: 24px 0 0;
       padding-bottom: 6px;
       border-bottom: 1px solid var(--border);
+    }}
+    .tweet-tabs {{
+      display: flex;
+      gap: 4px;
+      margin: 8px 0 10px;
+    }}
+    .tweet-tab {{
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+    }}
+    .tweet-tab.active {{
+      border-color: var(--blue);
+      color: var(--blue);
     }}
     .tweet-item {{
       padding: 8px 0;
@@ -327,6 +346,12 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
   </div>
 
   <div class="section-title">recent tweets (24h)</div>
+  <div class="tweet-tabs">
+    <button class="tweet-tab active" data-filter="all">all</button>
+    <button class="tweet-tab" data-filter="otonosekanade">奏</button>
+    <button class="tweet-tab" data-filter="momosuzunene">ねね</button>
+    <button class="tweet-tab" data-filter="ui_shig">うい</button>
+  </div>
   <div class="tweets">
 {tweets_html}
   </div>
@@ -334,6 +359,18 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
   <div class="footer">
     <span class="dot"></span>auto-refresh every 30 min
   </div>
+  <script>
+    document.querySelectorAll('.tweet-tab').forEach(btn => {{
+      btn.addEventListener('click', () => {{
+        document.querySelectorAll('.tweet-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.dataset.filter;
+        document.querySelectorAll('.tweet-item').forEach(item => {{
+          item.style.display = (filter === 'all' || item.dataset.account === filter) ? '' : 'none';
+        }});
+      }});
+    }});
+  </script>
 </body>
 </html>"""
 
