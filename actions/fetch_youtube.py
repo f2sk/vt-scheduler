@@ -3,6 +3,9 @@
 # 実行方法: python3 fetch_youtube.py
 # 環境変数: YOUTUBE_API_KEY
 # 出力: youtube.json
+# 方式: playlistItems.list ベース（search.listより大幅にクォータ削減）
+#   search.list: 100ユニット/call → 600ユニット/run
+#   本方式: channels.list(1) + playlistItems.list(1) + videos.list(1) = 3ユニット/channel → 9ユニット/run
 
 import os
 import json
@@ -19,6 +22,10 @@ TARGETS = [
     {"name": "しぐれうい", "channel_id": "UCt30jJgChL8qeT9VPadidSw"},
 ]
 
+PLAYLIST_ITEMS_MAX = 20  # アップロード一覧から取得する件数
+
+FREE_CHAT_KEYWORDS = ("free chat", "フリーチャット", "free-chat", "待機所")
+
 
 def api_get(endpoint: str, params: dict) -> dict:
     params["key"] = API_KEY
@@ -32,6 +39,7 @@ def api_get(endpoint: str, params: dict) -> dict:
 
 
 def get_uploads_playlist_id(channel_id: str) -> str:
+    """チャンネルのアップロードプレイリストIDを取得（1ユニット）"""
     data = api_get("channels", {
         "part": "contentDetails",
         "id": channel_id,
@@ -40,48 +48,40 @@ def get_uploads_playlist_id(channel_id: str) -> str:
     return data["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
 
-FREE_CHAT_KEYWORDS = ("free chat", "フリーチャット", "free-chat", "待機所")
-
-
 def get_live_and_upcoming(channel_id: str) -> list[dict]:
-    """ライブ配信中・待機所の動画を取得する（search.list 100units + videos.list 1unit）"""
-    seen_ids = set()
-    video_ids = []
-
-    for event_type in ("live", "upcoming"):
-        data = api_get("search", {
-            "part": "id",
-            "channelId": channel_id,
-            "eventType": event_type,
-            "type": "video",
-            "maxResults": 5,
-        })
-        for item in data.get("items", []):
-            vid = item["id"]["videoId"]
-            if vid not in seen_ids:
-                seen_ids.add(vid)
-                video_ids.append(vid)
-
+    """直近アップロードからライブ・待機中の動画を取得（3ユニット）"""
+    # アップロードプレイリストから直近N件のvideo_idを取得（1ユニット）
+    playlist_id = get_uploads_playlist_id(channel_id)
+    pl_data = api_get("playlistItems", {
+        "part": "contentDetails",
+        "playlistId": playlist_id,
+        "maxResults": PLAYLIST_ITEMS_MAX,
+        "fields": "items/contentDetails/videoId",
+    })
+    video_ids = [item["contentDetails"]["videoId"] for item in pl_data.get("items", [])]
     if not video_ids:
         return []
 
-    # 詳細情報（タイトル・正確な開始時刻・配信状態）を取得
+    # 動画詳細（ライブ状態・開始時刻）を一括取得（1ユニット）
     detail = api_get("videos", {
         "part": "snippet,liveStreamingDetails",
         "id": ",".join(video_ids),
+        "fields": "items(id,snippet(title,liveBroadcastContent),liveStreamingDetails)",
     })
 
     results = []
     for item in detail.get("items", []):
+        broadcast_content = item["snippet"].get("liveBroadcastContent", "none")
+        if broadcast_content not in ("live", "upcoming"):
+            continue
         title = item["snippet"]["title"]
-        # フリーチャット枠を除外
         if any(kw.lower() in title.lower() for kw in FREE_CHAT_KEYWORDS):
             continue
         live = item.get("liveStreamingDetails", {})
         results.append({
             "video_id": item["id"],
             "title": title,
-            "status": item["snippet"].get("liveBroadcastContent", "none"),
+            "status": broadcast_content,
             "scheduled_start": live.get("scheduledStartTime") or live.get("actualStartTime"),
             "url": f"https://www.youtube.com/watch?v={item['id']}",
         })
