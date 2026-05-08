@@ -11,3 +11,4 @@ tweet_store.json
 tweet_url_cache.json
 twitter.json
 .venv/
+youtube_token.json

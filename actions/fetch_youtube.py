@@ -1,7 +1,7 @@
 # YouTubeの配信待機所・ライブ配信を取得するスクリプト
-# GitHub Actionsから実行する
+# Pi上でcronから実行する
 # 実行方法: python3 fetch_youtube.py
-# 環境変数: YOUTUBE_API_KEY
+# 認証: ~/vt-scheduler/youtube_token.json（OAuth2、メン限アクセスに必要）
 # 出力: youtube.json
 # 方式: playlistItems.list ベース（search.listより大幅にクォータ削減）
 #   search.list: 100ユニット/call → 600ユニット/run
@@ -13,7 +13,12 @@ import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
 
-API_KEY = os.environ["YOUTUBE_API_KEY"]
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+
+SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"]
+# fetch_youtube.py は actions/ にあるため、トークンは一つ上の階層
+TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "youtube_token.json")
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "youtube.json")
 
 TARGETS = [
@@ -27,11 +32,22 @@ PLAYLIST_ITEMS_MAX = 20  # アップロード一覧から取得する件数
 FREE_CHAT_KEYWORDS = ("free chat", "フリーチャット", "free-chat", "待機所")
 
 
+def get_access_token() -> str:
+    """OAuthトークンを読み込み、期限切れなら自動更新して返す"""
+    creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        with open(TOKEN_PATH, "w") as f:
+            f.write(creds.to_json())
+    return creds.token
+
+
 def api_get(endpoint: str, params: dict) -> dict:
-    params["key"] = API_KEY
+    token = get_access_token()
     url = f"https://www.googleapis.com/youtube/v3/{endpoint}?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     try:
-        with urllib.request.urlopen(url) as res:
+        with urllib.request.urlopen(req) as res:
             return json.loads(res.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode()
