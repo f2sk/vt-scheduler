@@ -166,15 +166,23 @@ def compute_fetch_status(twitter_data: dict, youtube_data: dict) -> dict:
             tw_ok = age_h <= 2
             tw_label = format_dt_jst(fetched_at_str) if tw_ok else f"stale ({age_h:.0f}h)"
 
-    # YouTube: channelsにerrorがなければOK
+    # YouTube: fetched_atが存在し2時間以内かつerrorなしならOK
     yt_ok = False
     yt_label = "no data"
     if youtube_data:
-        channels = youtube_data.get("channels", {})
-        if channels:
-            errors = [cid for cid, ch in channels.items() if "error" in ch]
-            yt_ok = len(errors) == 0
-            yt_label = "ok" if yt_ok else f"err({len(errors)}/{len(channels)})"
+        fetched_at_str = youtube_data.get("fetched_at")
+        if fetched_at_str:
+            fetched_at = datetime.fromisoformat(fetched_at_str)
+            age_h = (datetime.now(timezone.utc) - fetched_at).total_seconds() / 3600
+            channels = youtube_data.get("channels", {})
+            errors = [cid for cid, ch in channels.items() if "error" in ch] if channels else []
+            yt_ok = age_h <= 2 and len(errors) == 0
+            if yt_ok:
+                yt_label = format_dt_jst(fetched_at_str)
+            elif age_h > 2:
+                yt_label = f"stale ({age_h:.0f}h)"
+            else:
+                yt_label = f"err({len(errors)}/{len(channels)})"
 
     return {"tw_ok": tw_ok, "tw_label": tw_label, "yt_ok": yt_ok, "yt_label": yt_label}
 
