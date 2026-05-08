@@ -1,7 +1,7 @@
-# DeepSeek APIでTwitter・YouTubeのデータを解析して配信情報を構造化するスクリプト
+# Cerebras APIでTwitter・YouTubeのデータを解析して配信情報を構造化するスクリプト
 # GitHub Actionsから実行する
 # 実行方法: python3 analyze.py
-# 環境変数: DEEPSEEK_API_KEY
+# 環境変数: CEREBRAS_API_KEY
 # 入力: twitter.json, youtube.json
 # 出力: schedule.json
 
@@ -11,9 +11,9 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 
-DEEPSEEK_API_KEY = os.environ["DEEPSEEK_API_KEY"]
-DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
-DEEPSEEK_MODEL = "deepseek-chat"
+CEREBRAS_API_KEY = os.environ["CEREBRAS_API_KEY"]
+CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
+CEREBRAS_MODEL = "llama-3.3-70b"
 
 BASE_DIR = os.path.dirname(__file__)
 TWITTER_JSON = os.path.join(BASE_DIR, "twitter.json")
@@ -80,17 +80,17 @@ JSON以外のテキストは出力しないでください。
 
 def llm_analyze(prompt: str) -> str:
     payload = json.dumps({
-        "model": DEEPSEEK_MODEL,
+        "model": CEREBRAS_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
         "response_format": {"type": "json_object"},
     }).encode()
     req = urllib.request.Request(
-        DEEPSEEK_URL,
+        CEREBRAS_URL,
         data=payload,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Authorization": f"Bearer {CEREBRAS_API_KEY}",
         },
         method="POST",
     )
@@ -99,7 +99,7 @@ def llm_analyze(prompt: str) -> str:
             data = json.loads(res.read())
             return data["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"DeepSeek API error {e.code}: {e.read().decode()}") from e
+        raise RuntimeError(f"Cerebras API error {e.code}: {e.read().decode()}") from e
 
 
 def load_twitter() -> dict:
