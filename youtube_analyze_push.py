@@ -1,7 +1,7 @@
 # YouTube取得→LLM解析→GitHubプッシュを行うスクリプト（Pi上でcronから実行）
 # Twitterスクレイピングとは独立して10分おきに実行する
 # 実行方法: python3 youtube_analyze_push.py
-# 依存: .env（GITHUB_TOKEN, CEREBRAS_API_KEY）
+# 依存: .env（GITHUB_TOKEN, CEREBRAS_API_KEY, BACKUP_PASSPHRASE）
 
 import subprocess
 import os
@@ -40,6 +40,10 @@ def main():
         sys.exit(rc)
 
     print("YouTube+解析+push完了")
+
+    rc = run("backup.py")
+    if rc != 0:
+        print(f"backup.py 失敗 (exit {rc})")
 
 
 main()
