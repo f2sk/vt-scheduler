@@ -25,29 +25,21 @@ jobs:
       - name: Checkout main branch
         uses: actions/checkout@v4
 
-      - name: Fetch twitter.json from data branch
+      - name: Fetch data files from data branch
         run: |
           git fetch origin data:data 2>/dev/null || true
-          if git show data:twitter.json > actions/twitter.json 2>/dev/null; then
-            echo "twitter.json loaded"
-          else
-            echo "twitter.json not found, skipping"
-          fi
+          for f in twitter.json youtube.json schedule.json; do
+            if git show data:$f > actions/$f 2>/dev/null; then
+              echo "$f loaded"
+            else
+              echo "$f not found, skipping"
+            fi
+          done
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Fetch YouTube data
-        env:
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-        run: python actions/fetch_youtube.py
-
-      - name: Analyze with LLM
-        env:
-          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
-        run: python actions/analyze.py
 
       - name: Generate HTML
         run: python actions/generate_html.py

@@ -1,4 +1,4 @@
-# twitter.jsonをGitHubのdataブランチにforce pushするスクリプト
+# twitter.json / youtube.json / schedule.json をGitHubのdataブランチにforce pushするスクリプト
 # git worktreeでmainと独立したディレクトリで管理する。
 # 履歴を残さないためcommit-treeで単一コミットを作り直してforce pushする。
 # 実行方法: python3 push_to_github.py
@@ -12,8 +12,13 @@ from datetime import datetime, timezone
 
 REPO_DIR = os.path.expanduser("~/vt-scheduler")
 WORKTREE_DIR = os.path.expanduser("~/vt-scheduler-data")
-DATA_SRC = os.path.join(REPO_DIR, "twitter.json")
-DATA_DST = os.path.join(WORKTREE_DIR, "twitter.json")
+
+# actions/ 以下の3ファイルをdataブランチにpush
+DATA_FILES = [
+    "twitter.json",
+    "youtube.json",
+    "schedule.json",
+]
 
 
 def run(cmd: list[str], cwd: str = REPO_DIR) -> str:
@@ -27,25 +32,24 @@ def ensure_worktree():
 
 
 def main():
-    if not os.path.exists(DATA_SRC):
-        print("twitter.json が存在しません")
-        return
+    actions_dir = os.path.join(REPO_DIR, "actions")
 
-    with open(DATA_SRC) as f:
-        data = json.load(f)
-    fetched_at = data.get("fetched_at", "unknown")
+    # 存在確認（schedule.jsonがなければ解析未完了）
+    for fname in DATA_FILES:
+        src = os.path.join(actions_dir, fname)
+        if not os.path.exists(src):
+            print(f"{fname} が存在しません。スキップします。")
+            return
 
     ensure_worktree()
 
-    # twitter.jsonをworktreeにコピー
-    shutil.copy2(DATA_SRC, DATA_DST)
+    for fname in DATA_FILES:
+        shutil.copy2(os.path.join(actions_dir, fname), os.path.join(WORKTREE_DIR, fname))
 
     msg = f"data: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
 
-    # ステージング
-    run(["git", "add", "twitter.json"], cwd=WORKTREE_DIR)
+    run(["git", "add"] + DATA_FILES, cwd=WORKTREE_DIR)
 
-    # commit-treeで親なし単一コミットを作成（履歴を積まない）
     tree = run(["git", "write-tree"], cwd=WORKTREE_DIR)
     author_env = {
         **os.environ,
@@ -60,11 +64,12 @@ def main():
     )
     commit_hash = result.stdout.strip()
 
-    # dataブランチをそのコミットに強制移動
     run(["git", "update-ref", "refs/heads/data", commit_hash], cwd=WORKTREE_DIR)
     run(["git", "push", "origin", "data", "--force"], cwd=WORKTREE_DIR)
 
-    print(f"push完了 (fetched_at: {fetched_at})")
+    with open(os.path.join(actions_dir, "schedule.json")) as f:
+        analyzed_at = json.load(f).get("analyzed_at", "unknown")
+    print(f"push完了 (analyzed_at: {analyzed_at})")
 
 
 main()
