@@ -13,48 +13,55 @@ https://f2sk.github.io/vt-scheduler/
 ## アーキテクチャ
 
 ```
-Raspberry Pi (ローカル)          GitHub
-──────────────────────          ──────────────────────────────────────
-scrape_twitter.py               Actions: update.yml (30分ごと)
-  └─ Playwright + cookies         ├─ fetch_youtube.py   (YouTube Data API)
-  └─ tweet_store.json に蓄積      ├─ analyze.py         (Gemini 2.5 Flash)
-  └─ twitter.json 生成            │    └─ twitter.json + youtube.json
-push_to_github.py               │         → schedule.json (streams配列)
-  └─ data ブランチへ force push   ├─ generate_html.py   → GitHub Pages
-                                  └─ update_calendar.py → Google Calendar
+Raspberry Pi (ローカル)               GitHub
+────────────────────────────────────  ──────────────────────────────────────
+scrape_twitter.py                     Actions: update.yml (30分ごと)
+  └─ Playwright + cookies               ├─ generate_html.py → GitHub Pages
+  └─ tweet_store.json に蓄積            └─ update_calendar.py → Google Calendar
+  └─ twitter.json 生成
+fetch_youtube.py
+  └─ YouTube Data API
+  └─ youtube.json 生成
+analyze.py
+  └─ Cerebras API (qwen-3-235b)
+  └─ twitter.json + youtube.json
+       → schedule.json (streams配列)
+push_to_github.py
+  └─ twitter.json / youtube.json /
+     schedule.json を data ブランチへ
+     force push
 ```
 
-Twitterスクレイピングのみラズパイで実行し、YouTube取得・LLM解析・ページ生成・カレンダー登録はGitHub Actions側で完結する。ラズパイ障害時もYouTubeベースの更新が継続される。
+Twitter・YouTube取得・LLM解析までラズパイで実行し、ページ生成・カレンダー登録・デプロイのみGitHub Actionsで完結する。
 
 ## ファイル構成
 
 | ファイル | 実行場所 | 概要 |
 |---|---|---|
 | `scrape_twitter.py` | Raspberry Pi | Playwright でツイートを取得し `tweet_store.json` に蓄積、`twitter.json` を生成 |
-| `push_to_github.py` | Raspberry Pi | `twitter.json` を `data` ブランチへ履歴なしで force push |
-| `actions/fetch_youtube.py` | GitHub Actions | YouTube Data API で live/upcoming 動画を取得し `youtube.json` を生成 |
-| `actions/analyze.py` | GitHub Actions | Gemini 2.5 Flash で全配信を `streams` 配列として構造化 |
-| `actions/generate_html.py` | GitHub Actions | `schedule.json` + `twitter.json` から `index.html` を生成 |
+| `actions/fetch_youtube.py` | Raspberry Pi | YouTube Data API で live/upcoming 動画を取得し `youtube.json` を生成 |
+| `actions/analyze.py` | Raspberry Pi | Cerebras API (Qwen3-235B) で全配信を `streams` 配列として構造化 |
+| `push_to_github.py` | Raspberry Pi | `twitter.json` / `youtube.json` / `schedule.json` を `data` ブランチへ履歴なしで force push |
+| `actions/generate_html.py` | GitHub Actions | `schedule.json` + `twitter.json` + `youtube.json` から `index.html` を生成 |
 | `actions/update_calendar.py` | GitHub Actions | `schedule.json` の全配信を Google Calendar に登録・更新・削除 |
 
 ## データフロー
 
-1. ラズパイが30分ごと（毎時25・55分）にTwitterをスクレイピング → `twitter.json` を data ブランチへ push
-2. cron-job.org が毎時00・30分に Actions をトリガー
-3. Actions が YouTube API + Gemini 2.5 Flash で解析 → `schedule.json`（VTuberごとの `streams` 配列）を生成
-4. `index.html` を生成して GitHub Pages へデプロイ
-5. Google Calendar に配信予定を登録（同一配信は `screen_name + start_datetime` から生成したIDで冪等管理）
+1. ラズパイが30分ごと（毎時25・55分）にTwitterスクレイピング → YouTube取得 → Cerebras解析 → 3ファイルを data ブランチへ push
+2. GitHub Actions が30分ごとに data ブランチから3ファイルを取得
+3. `index.html` を生成して GitHub Pages へデプロイ
+4. Google Calendar に配信予定を登録（同一配信は `screen_name + start_datetime` から生成したIDで冪等管理）
 
 ## schedule.json スキーマ
 
 ```json
 {
-  "analyzed_at": "2026-05-06T14:00:00+00:00",
+  "analyzed_at": "2026-05-08T16:35:00+00:00",
   "schedule": {
     "otonosekanade": {
       "streams": [
         {
-          "start_datetime": "05/06 21:00",
+          "start_datetime": "05/08 21:00",
           "title": "配信タイトル",
           "is_collab": false,
           "collab_note": null,
@@ -73,8 +80,6 @@ Twitterスクレイピングのみラズパイで実行し、YouTube取得・LLM
 
 | シークレット名 | 内容 |
 |---|---|
-| `YOUTUBE_API_KEY` | YouTube Data API v3 キー |
-| `GEMINI_API_KEY` | Google AI Studio の Gemini API キー |
 | `GOOGLE_CREDENTIALS_JSON` | Google サービスアカウントの JSON キー（文字列） |
 | `GOOGLE_CALENDAR_ID` | 登録先 Google Calendar の ID |
 
@@ -84,13 +89,23 @@ Twitterスクレイピングのみラズパイで実行し、YouTube取得・LLM
 # 依存インストール
 python3 -m venv .venv
 source .venv/bin/activate
-pip install playwright
+pip install playwright playwright-stealth
 playwright install chromium
 
 # Twitterのクッキーを cookies.json として保存（Cookie-Editor 等で取得）
 
+# .env に以下を設定
+# GITHUB_TOKEN=...
+# YOUTUBE_API_KEY=...
+# CEREBRAS_API_KEY=...
+
 # cron 設定（毎時25・55分）
-# 25,55 * * * * cd ~/vt-scheduler && .venv/bin/python scrape_twitter.py >> cron.log 2>&1 && .venv/bin/python push_to_github.py >> cron.log 2>&1
+# 25,55 * * * * cd ~/vt-scheduler && set -a && . .env && set +a && \
+#   .venv/bin/python scrape_twitter.py >> cron.log 2>&1 && \
+#   cp twitter.json actions/twitter.json && \
+#   .venv/bin/python actions/fetch_youtube.py >> cron.log 2>&1 && \
+#   .venv/bin/python actions/analyze.py >> cron.log 2>&1 && \
+#   .venv/bin/python push_to_github.py >> cron.log 2>&1
 ```
 
 ### GitHub Pages
@@ -106,13 +121,15 @@ playwright install chromium
 ## 手動テスト手順
 
 ```bash
-# ① Twitterデータ取得
-ssh <pi> 'cd ~/vt-scheduler && .venv/bin/python scrape_twitter.py'
+# ① Pi側でフルパイプライン実行
+ssh <pi> 'cd ~/vt-scheduler && set -a && . .env && set +a && \
+  .venv/bin/python scrape_twitter.py && \
+  cp twitter.json actions/twitter.json && \
+  .venv/bin/python actions/fetch_youtube.py && \
+  .venv/bin/python actions/analyze.py && \
+  .venv/bin/python push_to_github.py'
 
-# ② data ブランチへ push
-ssh <pi> 'cd ~/vt-scheduler && .venv/bin/python push_to_github.py'
-
-# ③ Actions 手動トリガー
+# ② Actions 手動トリガー
 gh workflow run update.yml --repo f2sk/vt-scheduler
 
 # 実行監視
