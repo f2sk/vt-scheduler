@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 
 CEREBRAS_API_KEY = os.environ["CEREBRAS_API_KEY"]
 CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
-CEREBRAS_MODEL = "llama-3.3-70b"
+CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507"
 
 BASE_DIR = os.path.dirname(__file__)
 TWITTER_JSON = os.path.join(BASE_DIR, "twitter.json")
@@ -91,6 +91,7 @@ def llm_analyze(prompt: str) -> str:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {CEREBRAS_API_KEY}",
+            "User-Agent": "curl/7.68.0",
         },
         method="POST",
     )
@@ -158,7 +159,7 @@ def main():
         youtube_data=youtube_text,
     )
 
-    print("Gemini解析中...")
+    print("Cerebras解析中...")
     result_text = llm_analyze(prompt)
 
     try:
