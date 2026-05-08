@@ -22,6 +22,15 @@ OUTPUT_JSON = os.path.join(BASE_DIR, "schedule.json")
 
 TWITTER_MAX_AGE_HOURS = 2
 
+JST = timezone(timedelta(hours=9))
+
+# channel_id → screen_name マッピング（fetch_youtube.py の TARGETS と対応）
+CHANNEL_SCREEN_NAMES = {
+    "UCZlDXzGoo7d44bwdNObFacg": "otonosekanade",
+    "UCAWSyEs_Io8MtpY3m-zqILA": "momosuzunene",
+    "UCt30jJgChL8qeT9VPadidSw": "ui_shig",
+}
+
 PROMPT_TEMPLATE = """\
 以下はVTuberのツイートと、YouTubeの配信情報です。
 これらを分析して、直近・近日中の配信予定を構造化JSONで返してください。
@@ -103,6 +112,35 @@ def llm_analyze(prompt: str) -> str:
         raise RuntimeError(f"Cerebras API error {e.code}: {e.read().decode()}") from e
 
 
+def youtube_to_streams(youtube: dict) -> dict:
+    """youtube.jsonをschedule形式に変換（LLM失敗時のフォールバック）"""
+    result = {sn: {"streams": []} for sn in CHANNEL_SCREEN_NAMES.values()}
+    for channel_id, ch in youtube.get("channels", {}).items():
+        screen_name = CHANNEL_SCREEN_NAMES.get(channel_id)
+        if not screen_name:
+            continue
+        streams = []
+        for v in ch.get("videos", []):
+            dt_str = v.get("scheduled_start")
+            start_datetime = None
+            if dt_str:
+                try:
+                    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00")).astimezone(JST)
+                    start_datetime = dt.strftime("%m/%d %H:%M")
+                except Exception:
+                    pass
+            streams.append({
+                "start_datetime": start_datetime,
+                "title": v.get("title"),
+                "is_collab": False,
+                "collab_note": None,
+                "source": "youtube",
+                "stream_url": v.get("url"),
+            })
+        result[screen_name]["streams"] = streams
+    return result
+
+
 def load_twitter() -> dict:
     if not os.path.exists(TWITTER_JSON):
         return {}
@@ -160,14 +198,16 @@ def main():
     )
 
     print("Cerebras解析中...")
-    result_text = llm_analyze(prompt)
-
     try:
-        result = json.loads(result_text)
-    except json.JSONDecodeError:
-        # コードブロックで囲まれている場合は除去
-        result_text = result_text.strip().removeprefix("```json").removesuffix("```").strip()
-        result = json.loads(result_text)
+        result_text = llm_analyze(prompt)
+        try:
+            result = json.loads(result_text)
+        except json.JSONDecodeError:
+            result_text = result_text.strip().removeprefix("```json").removesuffix("```").strip()
+            result = json.loads(result_text)
+    except Exception as e:
+        print(f"LLM失敗、YouTubeのみでフォールバック: {e}")
+        result = youtube_to_streams(youtube)
 
     output = {
         "analyzed_at": datetime.now(timezone.utc).isoformat(),
