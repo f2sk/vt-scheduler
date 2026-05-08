@@ -1,7 +1,7 @@
-# Gemini APIでTwitter・YouTubeのデータを解析して配信情報を構造化するスクリプト
+# DeepSeek APIでTwitter・YouTubeのデータを解析して配信情報を構造化するスクリプト
 # GitHub Actionsから実行する
-# 実行方法: python3 analyze_gemini.py
-# 環境変数: GEMINI_API_KEY
+# 実行方法: python3 analyze.py
+# 環境変数: DEEPSEEK_API_KEY
 # 入力: twitter.json, youtube.json
 # 出力: schedule.json
 
@@ -11,9 +11,9 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-GEMINI_MODEL = "gemini-3-flash-preview"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+DEEPSEEK_API_KEY = os.environ["DEEPSEEK_API_KEY"]
+DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_MODEL = "deepseek-chat"
 
 BASE_DIR = os.path.dirname(__file__)
 TWITTER_JSON = os.path.join(BASE_DIR, "twitter.json")
@@ -80,24 +80,26 @@ JSON以外のテキストは出力しないでください。
 
 def llm_analyze(prompt: str) -> str:
     payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0,
-            "response_mime_type": "application/json",
-        },
+        "model": DEEPSEEK_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
     }).encode()
     req = urllib.request.Request(
-        GEMINI_URL,
+        DEEPSEEK_URL,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        },
         method="POST",
     )
     try:
         with urllib.request.urlopen(req) as res:
             data = json.loads(res.read())
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            return data["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Gemini API error {e.code}: {e.read().decode()}") from e
+        raise RuntimeError(f"DeepSeek API error {e.code}: {e.read().decode()}") from e
 
 
 def load_twitter() -> dict:

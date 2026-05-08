@@ -13,6 +13,7 @@ from datetime import datetime, timezone, timedelta
 BASE_DIR = os.path.dirname(__file__)
 SCHEDULE_JSON = os.path.join(BASE_DIR, "schedule.json")
 TWITTER_JSON = os.path.join(BASE_DIR, "twitter.json")
+YOUTUBE_JSON = os.path.join(BASE_DIR, "youtube.json")
 OUTPUT_HTML = os.path.join(BASE_DIR, "index.html")
 
 JST = timezone(timedelta(hours=9))
@@ -152,13 +153,53 @@ def render_tweets(twitter_data: dict) -> str:
     return "\n".join(items)
 
 
-def generate(schedule_data: dict, twitter_data: dict) -> str:
+def compute_fetch_status(twitter_data: dict, youtube_data: dict) -> dict:
+    """Twitter/YouTubeの取得状態を返す"""
+    # Twitter: fetched_atが存在し2時間以内ならOK
+    tw_ok = False
+    tw_label = "no data"
+    if twitter_data:
+        fetched_at_str = twitter_data.get("fetched_at")
+        if fetched_at_str:
+            fetched_at = datetime.fromisoformat(fetched_at_str)
+            age_h = (datetime.now(timezone.utc) - fetched_at).total_seconds() / 3600
+            tw_ok = age_h <= 2
+            tw_label = format_dt_jst(fetched_at_str) if tw_ok else f"stale ({age_h:.0f}h)"
+
+    # YouTube: channelsにerrorがなければOK
+    yt_ok = False
+    yt_label = "no data"
+    if youtube_data:
+        channels = youtube_data.get("channels", {})
+        if channels:
+            errors = [cid for cid, ch in channels.items() if "error" in ch]
+            yt_ok = len(errors) == 0
+            yt_label = "ok" if yt_ok else f"err({len(errors)}/{len(channels)})"
+
+    return {"tw_ok": tw_ok, "tw_label": tw_label, "yt_ok": yt_ok, "yt_label": yt_label}
+
+
+def generate(schedule_data: dict, twitter_data: dict, fetch_status: dict | None = None) -> str:
     analyzed_at_iso = schedule_data.get("analyzed_at", datetime.now(timezone.utc).isoformat())
     analyzed_at = datetime.fromisoformat(analyzed_at_iso).astimezone(JST).strftime("%Y-%m-%d %H:%M JST")
     schedule = schedule_data.get("schedule", {})
 
     rows = render_schedule_rows(schedule, analyzed_at_iso)
     tweets_html = render_tweets(twitter_data)
+
+    # フェッチステータス HTML
+    if fetch_status:
+        tw_cls = "fetch-ok" if fetch_status["tw_ok"] else "fetch-ng"
+        yt_cls = "fetch-ok" if fetch_status["yt_ok"] else "fetch-ng"
+        status_html = (
+            f'  <div class="meta">data: '
+            f'<span class="fetch-label {tw_cls}">tw {esc(fetch_status["tw_label"])}</span>'
+            f' / '
+            f'<span class="fetch-label {yt_cls}">yt {esc(fetch_status["yt_label"])}</span>'
+            f'</div>'
+        )
+    else:
+        status_html = ""
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -312,6 +353,10 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
       border-top: 1px solid var(--border);
       padding-top: 10px;
     }}
+    .fetch-label {{ font-size: 11px; }}
+    .fetch-ok {{ color: var(--green); }}
+    .fetch-ng {{ color: #f85149; }}
+
     .dot {{
       display: inline-block;
       width: 6px; height: 6px;
@@ -326,6 +371,7 @@ def generate(schedule_data: dict, twitter_data: dict) -> str:
   <div class="header">
     <div class="title">&#x25a0; stream-monitor</div>
     <div class="meta">last updated: <span>{analyzed_at}</span></div>
+{status_html}
   </div>
 
   <div class="table-wrap">
@@ -384,7 +430,13 @@ def main():
         with open(TWITTER_JSON, encoding="utf-8") as f:
             twitter_data = json.load(f)
 
-    html = generate(schedule_data, twitter_data)
+    youtube_data = {}
+    if os.path.exists(YOUTUBE_JSON):
+        with open(YOUTUBE_JSON, encoding="utf-8") as f:
+            youtube_data = json.load(f)
+
+    fetch_status = compute_fetch_status(twitter_data, youtube_data)
+    html = generate(schedule_data, twitter_data, fetch_status)
 
     with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
         f.write(html)
