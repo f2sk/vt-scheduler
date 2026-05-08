@@ -28,6 +28,7 @@ TARGETS = [
 ]
 
 PLAYLIST_ITEMS_MAX = 20  # アップロード一覧から取得する件数
+MEMBERS_ITEMS_MAX = 10  # メンバー限定一覧から取得する件数
 
 FREE_CHAT_KEYWORDS = ("free chat", "フリーチャット", "free-chat", "待機所")
 
@@ -64,9 +65,14 @@ def get_uploads_playlist_id(channel_id: str) -> str:
     return data["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
 
+def get_members_playlist_id(channel_id: str) -> str:
+    """チャンネルIDからメンバー限定プレイリストIDを導出（API不要）"""
+    return "UUMO" + channel_id[2:]
+
+
 def get_live_and_upcoming(channel_id: str) -> list[dict]:
-    """直近アップロードからライブ・待機中の動画を取得（3ユニット）"""
-    # アップロードプレイリストから直近N件のvideo_idを取得（1ユニット）
+    """直近アップロード＋メン限プレイリストからライブ・待機中の動画を取得（4ユニット）"""
+    # uploadsプレイリストから直近N件のvideo_idを取得（1ユニット）
     playlist_id = get_uploads_playlist_id(channel_id)
     pl_data = api_get("playlistItems", {
         "part": "contentDetails",
@@ -75,6 +81,23 @@ def get_live_and_upcoming(channel_id: str) -> list[dict]:
         "fields": "items/contentDetails/videoId",
     })
     video_ids = [item["contentDetails"]["videoId"] for item in pl_data.get("items", [])]
+
+    # メン限プレイリストから直近N件を追加取得（1ユニット）
+    members_pl_id = get_members_playlist_id(channel_id)
+    try:
+        mem_data = api_get("playlistItems", {
+            "part": "contentDetails",
+            "playlistId": members_pl_id,
+            "maxResults": MEMBERS_ITEMS_MAX,
+            "fields": "items/contentDetails/videoId",
+        })
+        for item in mem_data.get("items", []):
+            vid = item["contentDetails"]["videoId"]
+            if vid not in video_ids:
+                video_ids.append(vid)
+    except Exception:
+        pass  # メンバーでない・プレイリスト非公開の場合はスキップ
+
     if not video_ids:
         return []
 
