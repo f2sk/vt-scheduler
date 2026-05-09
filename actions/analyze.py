@@ -38,10 +38,10 @@ PROMPT_TEMPLATE = """\
 # 現在日時（JST）
 {current_datetime}
 
-# 分析対象VTuber
-- 音乃瀬奏 (@otonosekanade)
-- 桃鈴ねね (@momosuzunene)
-- しぐれうい (@ui_shig)
+# 分析対象VTuber（括弧内が各自のYouTubeチャンネルURL）
+- 音乃瀬奏 (@otonosekanade) https://www.youtube.com/channel/UCZlDXzGoo7d44bwdNObFacg
+- 桃鈴ねね (@momosuzunene) https://www.youtube.com/channel/UCAWSyEs_Io8MtpY3m-zqILA
+- しぐれうい (@ui_shig) https://www.youtube.com/channel/UCt30jJgChL8qeT9VPadidSw
 
 # Twitterデータ
 {twitter_data}
@@ -78,10 +78,12 @@ PROMPT_TEMPLATE = """\
   - "solo"  : 自分の枠で一人で配信
   - "collab": 自分の枠で他者と共同配信
   - "guest" : 他者の枠に出演（RTや引用RTによる他枠告知も含む）
+  - 判定補助: stream_urlのYouTubeチャンネルが当該VTuberのチャンネルでない場合は"guest"とする
+  - 判定補助: RTおよび引用RTは原則"guest"とする。ただし自分の枠を告知していると明らかな場合を除く
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
 - titleはYouTubeデータのtitleフィールドをそのまま使う。YouTubeにない場合はツイート本文から配信タイトル部分を抜き出す
 - stream_urlはYouTubeのurlフィールドを優先し、なければツイート本文中のURLを使う
-- RTおよび引用RTは他枠への出演告知として扱う（stream_type="guest"）
+- stream_urlは改行・空白を含まない1行のURLとして出力すること
 - フリーチャット枠（Free chat）は配信予定としてカウントしない
 - titleを要約・翻訳・改変しないこと
 - 配信が検出されない場合はstreams配列を空にする
@@ -268,19 +270,25 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
         new_streams = new_schedule.get(sn, {}).get("streams", [])
         prev_streams = prev.get(sn, {}).get("streams", [])
 
-        new_urls = {s["stream_url"] for s in new_streams if s.get("stream_url")}
+        def _norm_url(u):
+            return u.strip() if u else u
+
+        new_urls = {_norm_url(s["stream_url"]) for s in new_streams if s.get("stream_url")}
         new_dts  = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
 
         # 前回エントリのうち新規結果にないものを carry-forward
         extra = []
         for s in prev_streams:
-            url    = s.get("stream_url")
+            url    = _norm_url(s.get("stream_url"))
             dt_str = s.get("start_datetime")
             if url and url in new_urls:
                 continue
             if not url and dt_str and dt_str in new_dts:
                 continue
             if _should_show(s, live_urls, upcoming_urls, now):
+                # URL正規化（改行混入対策）とsource正規化
+                if url != s.get("stream_url"):
+                    s = {**s, "stream_url": url}
                 extra.append(_normalize_source(s, live_urls, upcoming_urls))
 
         # 新規エントリも source 正規化
