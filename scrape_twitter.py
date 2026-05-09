@@ -1,7 +1,7 @@
 # Twitterスクレイピングスクリプト
 # 監視対象アカウントの最新ツイートを取得してJSONで出力する
 # 実行方法: python3 scrape_twitter.py
-# 出力: twitter.json（GitHub Actionsが読み込む）
+# 出力: actions/twitter.json（analyze.py が読む場所に直接保存）
 # 依存: playwright, playwright-stealth (pip install playwright playwright-stealth)
 
 import asyncio
@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from playwright_stealth import Stealth
 
 COOKIES_PATH = os.path.join(os.path.dirname(__file__), "cookies.json")
-OUTPUT_PATH  = os.path.join(os.path.dirname(__file__), "twitter.json")
+OUTPUT_PATH  = os.path.join(os.path.dirname(__file__), "actions", "twitter.json")
 STORE_PATH   = os.path.join(os.path.dirname(__file__), "tweet_store.json")
 
 TARGETS = [
