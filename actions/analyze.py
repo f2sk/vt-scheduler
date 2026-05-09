@@ -222,10 +222,11 @@ def _should_show(stream: dict, live_urls: set, upcoming_urls: set, now: datetime
         return True
     # YouTube = none → start_dt で判断
     dt = parse_stream_dt(stream.get("start_datetime"))
-    if dt and dt < now:
-        return False
     if dt and dt >= now:
         return True
+    if dt and dt < now:
+        # 直近5時間以内はガード（YouTube API が一時的に返さないケースへの保護）
+        return now - dt <= timedelta(hours=5)
     # start_dt = null → Twitter あり（source に twitter を含む）なら表示
     return stream.get("source") in ("twitter", "both")
 
