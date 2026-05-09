@@ -6,6 +6,9 @@
 import subprocess
 import shutil
 import os
+from datetime import datetime, timezone, timedelta
+
+JST = timezone(timedelta(hours=9))
 
 REPO_DIR = os.path.expanduser("~/vt-scheduler")
 PYTHON = os.path.join(REPO_DIR, ".venv/bin/python")
@@ -24,6 +27,7 @@ def run(script: str) -> int:
 
 
 def main():
+    print(f"--- {datetime.now(JST).strftime('%Y-%m-%d %H:%M JST')}")
     print("Twitterスクレイピング開始")
     rc = run("scrape_twitter.py")
     if rc != 0:
