@@ -80,6 +80,7 @@ PROMPT_TEMPLATE = """\
   - "guest" : 他者の枠に出演（RTや引用RTによる他枠告知も含む）
   - 判定補助: stream_urlのYouTubeチャンネルが当該VTuberのチャンネルでない場合は"guest"とする
   - 判定補助: RTおよび引用RTは原則"guest"とする。ただし自分の枠を告知していると明らかな場合を除く
+  - 注意: YouTubeデータに含まれる動画は自身のチャンネルとは限らない（メンバー限定プレイリスト経由で他者の枠が含まれる場合がある）。動画タイトルや配信者名から判断すること
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
 - titleはYouTubeデータのtitleフィールドをそのまま使う。YouTubeにない場合はツイート本文から配信タイトル部分を抜き出す
 - stream_urlはYouTubeのurlフィールドを優先し、なければツイート本文中のURLを使う
@@ -183,6 +184,15 @@ def normalize_twitter(accounts: dict) -> dict:
     return normalized
 
 
+def extract_video_id(url: str | None) -> str | None:
+    """YouTube URL から video_id（11文字）を抽出する"""
+    if not url:
+        return None
+    import re as _re
+    m = _re.search(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', url)
+    return m.group(1) if m else None
+
+
 def parse_stream_dt(dt_str: str | None) -> datetime | None:
     """MM/DD HH:MM → JST datetime。年またぎを考慮"""
     if not dt_str:
@@ -283,15 +293,20 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
         def _norm_url(u):
             return u.strip() if u else u
 
-        new_urls = {_norm_url(s["stream_url"]) for s in new_streams if s.get("stream_url")}
-        new_dts  = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
+        new_urls  = {_norm_url(s["stream_url"]) for s in new_streams if s.get("stream_url")}
+        new_vids  = {extract_video_id(s.get("stream_url")) for s in new_streams} - {None}
+        new_dts   = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
 
         # 前回エントリのうち新規結果にないものを carry-forward
         extra = []
         for s in prev_streams:
             url    = _norm_url(s.get("stream_url"))
             dt_str = s.get("start_datetime")
+            vid    = extract_video_id(url)
+            # URL完全一致 or video_id一致 でデデュープ
             if url and url in new_urls:
+                continue
+            if vid and vid in new_vids:
                 continue
             if not url and dt_str and dt_str in new_dts:
                 continue
@@ -301,8 +316,16 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
                     s = {**s, "stream_url": url}
                 extra.append(_normalize_source(s, live_urls, upcoming_urls))
 
-        # 新規エントリも source 正規化
-        normalized_new = [_normalize_source(s, live_urls, upcoming_urls) for s in new_streams]
+        # 新規エントリも source 正規化 / video_id重複除去
+        seen_vids: set[str] = set()
+        normalized_new = []
+        for s in new_streams:
+            vid = extract_video_id(s.get("stream_url"))
+            if vid and vid in seen_vids:
+                continue
+            if vid:
+                seen_vids.add(vid)
+            normalized_new.append(_normalize_source(s, live_urls, upcoming_urls))
 
         all_streams = normalized_new + extra
         all_streams.sort(key=lambda s: parse_stream_dt(s.get("start_datetime")) or _far_future)
