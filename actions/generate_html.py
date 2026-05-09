@@ -30,28 +30,33 @@ def format_dt_jst(iso: str) -> str:
 
 
 def pick_primary_stream(streams: list, now_jst: datetime, year: int) -> dict | None:
-    """現在時刻に最も近い未来の配信を返す。なければNone"""
-    future = []
+    """表示する配信を1件選ぶ。is_live=True > 未来 > 直近の過去の優先順"""
+    # is_live=True の配信は最優先
+    live_streams = [s for s in streams if s.get("is_live")]
+    if live_streams:
+        return live_streams[0]
+
+    parsed = []
     for s in streams:
         dt_str = s.get("start_datetime")
         if not dt_str:
-            future.append((None, s))
+            parsed.append((None, s))
             continue
         try:
             mm, dd, hh, mi = int(dt_str[0:2]), int(dt_str[3:5]), int(dt_str[6:8]), int(dt_str[9:11])
             dt = datetime(year, mm, dd, hh, mi, tzinfo=JST)
-            future.append((dt, s))
+            parsed.append((dt, s))
         except Exception:
-            future.append((None, s))
+            parsed.append((None, s))
     # 未来のものを優先、同じなら早い順
-    future_only = [(dt, s) for dt, s in future if dt and dt >= now_jst]
+    future_only = [(dt, s) for dt, s in parsed if dt and dt >= now_jst]
     if future_only:
         return min(future_only, key=lambda x: x[0])[1]
     # 未来がなければ最も直近の過去
-    past = [(dt, s) for dt, s in future if dt]
+    past = [(dt, s) for dt, s in parsed if dt]
     if past:
         return max(past, key=lambda x: x[0])[1]
-    return future[0][1] if future else None
+    return parsed[0][1] if parsed else None
 
 
 def render_stream_cell(s: dict) -> str:

@@ -197,12 +197,13 @@ def parse_stream_dt(dt_str: str | None) -> datetime | None:
         return None
 
 
-def _build_yt_url_sets(youtube_data: dict | None) -> tuple[set[str], set[str]]:
-    """YouTube データから live/upcoming の URL セットを返す"""
+def _build_yt_url_sets(youtube_data: dict | None) -> tuple[set[str], set[str], set[str]]:
+    """YouTube データから live/upcoming/ended の URL セットを返す"""
     live_urls: set[str] = set()
     upcoming_urls: set[str] = set()
+    ended_urls: set[str] = set(youtube_data.get("ended_urls", []) if youtube_data else [])
     if not youtube_data:
-        return live_urls, upcoming_urls
+        return live_urls, upcoming_urls, ended_urls
     for ch in youtube_data.get("channels", {}).values():
         for v in ch.get("videos", []):
             url = v.get("url")
@@ -212,12 +213,15 @@ def _build_yt_url_sets(youtube_data: dict | None) -> tuple[set[str], set[str]]:
                 live_urls.add(url)
             elif v.get("status") == "upcoming":
                 upcoming_urls.add(url)
-    return live_urls, upcoming_urls
+    return live_urls, upcoming_urls, ended_urls
 
 
-def _should_show(stream: dict, live_urls: set, upcoming_urls: set, now: datetime) -> bool:
+def _should_show(stream: dict, live_urls: set, upcoming_urls: set, ended_urls: set, now: datetime) -> bool:
     """フローチャートに基づき表示すべきかを返す"""
     url = stream.get("stream_url")
+    # 確認済み終了は即非表示（5時間ガード無視）
+    if url and url in ended_urls:
+        return False
     if url and url in live_urls:
         return True
     if url and url in upcoming_urls:
@@ -234,8 +238,9 @@ def _should_show(stream: dict, live_urls: set, upcoming_urls: set, now: datetime
 
 
 def _normalize_source(stream: dict, live_urls: set, upcoming_urls: set) -> dict:
-    """YouTube status と既存 source を元に source フィールドを正規化する"""
+    """YouTube status と既存 source を元に source / is_live フィールドを正規化する"""
     url = stream.get("stream_url")
+    is_live = bool(url and url in live_urls)
     yt_active = bool(url and (url in live_urls or url in upcoming_urls))
     tw_active = stream.get("source") in ("twitter", "both")
     if yt_active and tw_active:
@@ -246,9 +251,14 @@ def _normalize_source(stream: dict, live_urls: set, upcoming_urls: set) -> dict:
         new_source = "twitter"
     else:
         new_source = stream.get("source")
-    if new_source == stream.get("source"):
-        return stream
-    return {**stream, "source": new_source}
+    updated = dict(stream)
+    if new_source != stream.get("source"):
+        updated["source"] = new_source
+    if is_live != stream.get("is_live", False):
+        updated["is_live"] = is_live
+    elif not is_live and "is_live" in updated:
+        del updated["is_live"]
+    return updated if updated != stream else stream
 
 
 def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
@@ -261,7 +271,7 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
         except Exception:
             pass
 
-    live_urls, upcoming_urls = _build_yt_url_sets(youtube_data)
+    live_urls, upcoming_urls, ended_urls = _build_yt_url_sets(youtube_data)
     now = datetime.now(JST)
     _far_future = datetime(9999, 12, 31, 23, 59, tzinfo=JST)
 
@@ -285,7 +295,7 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
                 continue
             if not url and dt_str and dt_str in new_dts:
                 continue
-            if _should_show(s, live_urls, upcoming_urls, now):
+            if _should_show(s, live_urls, upcoming_urls, ended_urls, now):
                 # URL正規化（改行混入対策）とsource正規化
                 if url != s.get("stream_url"):
                     s = {**s, "stream_url": url}
