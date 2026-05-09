@@ -65,11 +65,15 @@ def render_stream_cell(s: dict) -> str:
     return f"{title_cell}{collab_cell}"
 
 
+DISPLAY_ORDER = ["otonosekanade", "momosuzunene", "ui_shig"]
+
+
 def render_schedule_rows(schedule: dict, analyzed_at_iso: str) -> str:
     now_jst = datetime.fromisoformat(analyzed_at_iso).astimezone(JST)
     year = now_jst.year
     rows = []
-    for screen_name, info in schedule.items():
+    for screen_name in DISPLAY_ORDER:
+        info = schedule.get(screen_name, {})
         streams = info.get("streams", [])
         primary = pick_primary_stream(streams, now_jst, year) if streams else None
 
