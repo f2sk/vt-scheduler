@@ -58,7 +58,7 @@ PROMPT_TEMPLATE = """\
       {{
         "start_datetime": "MM/DD HH:MM" または null,
         "title": "YouTubeのtitleフィールドまたはツイート本文から抜いた配信タイトル（要約・翻訳せずそのままコピー）" または null,
-        "is_collab": true/false,
+        "stream_type": "solo" / "collab" / "guest",
         "collab_note": "コラボ相手・他枠出演の説明" または null,
         "source": "twitter" / "youtube" / "both",
         "stream_url": "配信URL（YouTubeのURL優先、なければツイート内のURL）" または null
@@ -74,11 +74,14 @@ PROMPT_TEMPLATE = """\
 - streams: 現在時刻の前後72時間以内に存在する配信をすべて列挙する（過去・未来を問わない、複数あればすべて含める）
 - streams配列はstart_datetimeの昇順（早い順）で並べる
 - start_datetime: 日本時間（JST）でMM/DD HH:MM形式（例: 05/07 21:00）。不明な場合はnull
-- is_collab: 自分の枠ではなく他者の配信に出演する場合もtrue
+- stream_type: 以下の3値で判定する
+  - "solo"  : 自分の枠で一人で配信
+  - "collab": 自分の枠で他者と共同配信
+  - "guest" : 他者の枠に出演（RTや引用RTによる他枠告知も含む）
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
 - titleはYouTubeデータのtitleフィールドをそのまま使う。YouTubeにない場合はツイート本文から配信タイトル部分を抜き出す
 - stream_urlはYouTubeのurlフィールドを優先し、なければツイート本文中のURLを使う
-- RTおよび引用RTは他枠への出演告知として扱う
+- RTおよび引用RTは他枠への出演告知として扱う（stream_type="guest"）
 - フリーチャット枠（Free chat）は配信予定としてカウントしない
 - titleを要約・翻訳・改変しないこと
 - 配信が検出されない場合はstreams配列を空にする
@@ -132,7 +135,7 @@ def youtube_to_streams(youtube: dict) -> dict:
             streams.append({
                 "start_datetime": start_datetime,
                 "title": v.get("title"),
-                "is_collab": False,
+                "stream_type": "solo",
                 "collab_note": None,
                 "source": "youtube",
                 "stream_url": v.get("url"),
@@ -344,7 +347,7 @@ def main():
             for s in streams:
                 t = (s.get("start_datetime") or "--")
                 title = (s.get("title") or "")[:30]
-                collab = " [collab]" if s.get("is_collab") else ""
+                collab = f" [{s.get('stream_type', 'solo')}]" if s.get("stream_type", "solo") != "solo" else ""
                 print(f"  @{sn}: {t} {title}{collab}")
         else:
             print(f"  @{sn}: 配信なし")

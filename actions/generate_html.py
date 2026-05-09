@@ -74,9 +74,9 @@ def render_schedule_rows(schedule: dict, analyzed_at_iso: str) -> str:
         primary = pick_primary_stream(streams, now_jst, year) if streams else None
 
         if primary:
-            is_collab = primary.get("is_collab", False)
-            status_class = "status-collab" if is_collab else "status-live"
-            status_text = "COLLAB" if is_collab else "LIVE"
+            stream_type = primary.get("stream_type", "solo")
+            status_class = {"solo": "status-live", "collab": "status-collab", "guest": "status-guest"}.get(stream_type, "status-live")
+            status_text  = {"solo": "SOLO",        "collab": "COLLAB",        "guest": "GUEST"}.get(stream_type, "SOLO")
             start_time = primary.get("start_datetime") or "--"
             source = primary.get("source") or "none"
             title_html = render_stream_cell(primary)
@@ -244,6 +244,7 @@ def generate(schedule_data: dict, twitter_data: dict, fetch_status: dict | None 
       --green: #3fb950;
       --blue: #58a6ff;
       --purple: #bc8cff;
+      --yellow: #e3b341;
       --font: 'Courier New', 'Consolas', monospace;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -296,6 +297,7 @@ def generate(schedule_data: dict, twitter_data: dict, fetch_status: dict | None 
     .col-title a:hover {{ color: var(--blue); text-decoration: underline; }}
     .status-live   {{ color: var(--green);  }}
     .status-collab {{ color: var(--purple); }}
+    .status-guest  {{ color: var(--yellow); }}
     .status-none   {{ color: var(--muted);  }}
     .collab-note {{ color: var(--muted); font-size: 11px; }}
     .extra-streams {{

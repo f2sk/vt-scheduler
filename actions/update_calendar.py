@@ -56,9 +56,9 @@ def build_event(screen_name: str, stream: dict, start_dt: datetime) -> dict:
     title = stream.get("title") or "配信"
     stream_url = stream.get("stream_url") or ""
     collab_note = stream.get("collab_note") or ""
-    is_collab = stream.get("is_collab", False)
+    stream_type = stream.get("stream_type", "solo")
 
-    prefix = "[コラボ]" if is_collab else ""
+    prefix = "[コラボ]" if stream_type in ("collab", "guest") else ""
     summary = f"{prefix}{name} {title}".strip()
 
     description_parts = []
