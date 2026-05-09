@@ -233,6 +233,9 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
             # 開始時刻が過去でも配信中なら残す
             if dt and dt < now and url not in live_urls:
                 continue
+            # YouTube live で確認済みなら source を both に更新
+            if url in live_urls and s.get("source") != "both":
+                s = {**s, "source": "both"}
             extra.append(s)
 
         all_streams = new_streams + extra
