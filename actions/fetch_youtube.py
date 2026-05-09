@@ -2,10 +2,11 @@
 # Pi上でcronから実行する
 # 実行方法: python3 fetch_youtube.py
 # 認証: ~/vt-scheduler/youtube_token.json（OAuth2、メン限アクセスに必要）
-# 出力: youtube.json
+# 出力: youtube.json, tracked_videos.json
 # 方式: playlistItems.list ベース（search.listより大幅にクォータ削減）
 #   search.list: 100ユニット/call → 600ユニット/run
 #   本方式: channels.list(1) + playlistItems.list(1) + videos.list(1) = 3ユニット/channel → 9ユニット/run
+#   + tracked_videos補完: videos.list(1)/run（upcoming捕捉済みIDのlive追跡）
 
 import os
 import json
@@ -20,6 +21,7 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"]
 # fetch_youtube.py は actions/ にあるため、トークンは一つ上の階層
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "youtube_token.json")
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "youtube.json")
+TRACKED_PATH = os.path.join(os.path.dirname(__file__), "tracked_videos.json")
 
 TARGETS = [
     {"name": "音乃瀬奏",   "channel_id": "UCZlDXzGoo7d44bwdNObFacg"},
@@ -31,6 +33,55 @@ PLAYLIST_ITEMS_MAX = 20  # アップロード一覧から取得する件数
 MEMBERS_ITEMS_MAX = 10  # メンバー限定一覧から取得する件数
 
 FREE_CHAT_KEYWORDS = ("free chat", "フリーチャット", "free-chat", "待機所")
+
+
+def load_tracked() -> dict:
+    """追跡中の video_id → {channel_id, added_at} を返す"""
+    if not os.path.exists(TRACKED_PATH):
+        return {}
+    try:
+        return json.load(open(TRACKED_PATH, encoding="utf-8")).get("videos", {})
+    except Exception:
+        return {}
+
+
+def save_tracked(videos: dict) -> None:
+    with open(TRACKED_PATH, "w", encoding="utf-8") as f:
+        json.dump({"videos": videos}, f, ensure_ascii=False, indent=2)
+
+
+def check_tracked(tracked: dict) -> tuple[list[dict], set[str]]:
+    """tracked IDs を videos.list で一括確認（1ユニット）。
+    Returns: (live/upcoming エントリ一覧, 削除すべき ID セット)"""
+    if not tracked:
+        return [], set()
+    video_ids = list(tracked.keys())
+    detail = api_get("videos", {
+        "part": "snippet,liveStreamingDetails",
+        "id": ",".join(video_ids),
+        "fields": "items(id,snippet(title,liveBroadcastContent),liveStreamingDetails)",
+    })
+    active: list[dict] = []
+    to_remove: set[str] = set(video_ids)  # none になったものを除去
+    for item in detail.get("items", []):
+        vid = item["id"]
+        broadcast_content = item["snippet"].get("liveBroadcastContent", "none")
+        if broadcast_content not in ("live", "upcoming"):
+            continue
+        title = item["snippet"]["title"]
+        if any(kw.lower() in title.lower() for kw in FREE_CHAT_KEYWORDS):
+            continue
+        live = item.get("liveStreamingDetails", {})
+        active.append({
+            "video_id": vid,
+            "title": title,
+            "status": broadcast_content,
+            "scheduled_start": live.get("scheduledStartTime") or live.get("actualStartTime"),
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "channel_id": tracked[vid]["channel_id"],
+        })
+        to_remove.discard(vid)
+    return active, to_remove
 
 
 def get_access_token() -> str:
@@ -128,10 +179,17 @@ def get_live_and_upcoming(channel_id: str) -> list[dict]:
 
 
 def main():
+    tracked = load_tracked()
+    tracked_active, tracked_remove = check_tracked(tracked)
+    if tracked_active:
+        print(f"tracked補完: {len(tracked_active)}件")
+
     result = {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "channels": {},
     }
+
+    updated_tracked = {vid: data for vid, data in tracked.items() if vid not in tracked_remove}
 
     for target in TARGETS:
         cid = target["channel_id"]
@@ -139,20 +197,29 @@ def main():
         print(f"取得中: {name}")
         try:
             videos = get_live_and_upcoming(cid)
-            result["channels"][cid] = {
-                "name": name,
-                "videos": videos,
-            }
+
+            # tracked補完: playlist に出ていないが tracked で live/upcoming なものを追加
+            playlist_ids = {v["video_id"] for v in videos}
+            for tv in tracked_active:
+                if tv["channel_id"] == cid and tv["video_id"] not in playlist_ids:
+                    videos.append({k: v for k, v in tv.items() if k != "channel_id"})
+
+            # upcoming を tracking に追加
+            for v in videos:
+                if v["status"] == "upcoming" and v["video_id"] not in updated_tracked:
+                    updated_tracked[v["video_id"]] = {
+                        "channel_id": cid,
+                        "added_at": datetime.now(timezone.utc).isoformat(),
+                    }
+
+            result["channels"][cid] = {"name": name, "videos": videos}
             print(f"  → {len(videos)}件 (live/upcoming)")
         except Exception as e:
             import traceback; traceback.print_exc()
             print(f"  → エラー: {e}")
-            result["channels"][cid] = {
-                "name": name,
-                "videos": [],
-                "error": str(e),
-            }
+            result["channels"][cid] = {"name": name, "videos": [], "error": str(e)}
 
+    save_tracked(updated_tracked)
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"\n保存完了: {OUTPUT_PATH}")
