@@ -192,7 +192,7 @@ def parse_stream_dt(dt_str: str | None) -> datetime | None:
         return None
 
 
-def merge_with_previous(new_schedule: dict) -> dict:
+def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
     """前回のschedule.jsonから未来の配信を引き継ぎ、新規結果とマージする"""
     if not os.path.exists(OUTPUT_JSON):
         return new_schedule
@@ -201,6 +201,14 @@ def merge_with_previous(new_schedule: dict) -> dict:
             prev = json.load(f).get("schedule", {})
     except Exception:
         return new_schedule
+
+    # YouTube で現在 live な動画 URL セット
+    live_urls: set[str] = set()
+    if youtube_data:
+        for ch in youtube_data.get("channels", {}).values():
+            for v in ch.get("videos", []):
+                if v.get("status") == "live" and v.get("url"):
+                    live_urls.add(v["url"])
 
     now = datetime.now(JST)
     _far_future = datetime(9999, 12, 31, 23, 59, tzinfo=JST)
@@ -222,7 +230,8 @@ def merge_with_previous(new_schedule: dict) -> dict:
             if not url and dt_str and dt_str in new_dts:
                 continue
             dt = parse_stream_dt(dt_str)
-            if dt and dt < now:
+            # 開始時刻が過去でも配信中なら残す
+            if dt and dt < now and url not in live_urls:
                 continue
             extra.append(s)
 
@@ -270,7 +279,7 @@ def main():
         print(f"LLM失敗、YouTubeのみでフォールバック: {e}")
         result = youtube_to_streams(youtube)
 
-    result = merge_with_previous(result)
+    result = merge_with_previous(result, youtube)
 
     output = {
         "analyzed_at": datetime.now(timezone.utc).isoformat(),
