@@ -153,7 +153,7 @@ def render_tweets(twitter_data: dict) -> str:
     return "\n".join(items)
 
 
-def compute_fetch_status(twitter_data: dict, youtube_data: dict) -> dict:
+def compute_fetch_status(twitter_data: dict, youtube_data: dict, schedule_data: dict | None = None) -> dict:
     """Twitter/YouTubeの取得状態を返す"""
     # Twitter: fetched_atが存在し2時間以内ならOK
     tw_ok = False
@@ -184,7 +184,22 @@ def compute_fetch_status(twitter_data: dict, youtube_data: dict) -> dict:
             else:
                 yt_label = f"err({len(errors)}/{len(channels)})"
 
-    return {"tw_ok": tw_ok, "tw_label": tw_label, "yt_ok": yt_ok, "yt_label": yt_label}
+    # LLM: schedule.jsonのllm_statusフィールドから取得
+    llm_ok = False
+    llm_label = "no data"
+    if schedule_data:
+        status = schedule_data.get("llm_status", "")
+        if status == "ok":
+            llm_ok = True
+            llm_label = "ok"
+        elif status.startswith("fallback"):
+            code = status.split(":", 1)[1] if ":" in status else ""
+            llm_label = f"fallback({code})" if code else "fallback"
+        elif status:
+            llm_label = status
+
+    return {"tw_ok": tw_ok, "tw_label": tw_label, "yt_ok": yt_ok, "yt_label": yt_label,
+            "llm_ok": llm_ok, "llm_label": llm_label}
 
 
 def generate(schedule_data: dict, twitter_data: dict, fetch_status: dict | None = None) -> str:
@@ -197,13 +212,16 @@ def generate(schedule_data: dict, twitter_data: dict, fetch_status: dict | None 
 
     # フェッチステータス HTML
     if fetch_status:
-        tw_cls = "fetch-ok" if fetch_status["tw_ok"] else "fetch-ng"
-        yt_cls = "fetch-ok" if fetch_status["yt_ok"] else "fetch-ng"
+        tw_cls  = "fetch-ok" if fetch_status["tw_ok"]  else "fetch-ng"
+        yt_cls  = "fetch-ok" if fetch_status["yt_ok"]  else "fetch-ng"
+        llm_cls = "fetch-ok" if fetch_status["llm_ok"] else "fetch-ng"
         status_html = (
             f'  <div class="meta">data: '
             f'<span class="fetch-label {tw_cls}">tw {esc(fetch_status["tw_label"])}</span>'
             f' / '
             f'<span class="fetch-label {yt_cls}">yt {esc(fetch_status["yt_label"])}</span>'
+            f' / '
+            f'<span class="fetch-label {llm_cls}">llm {esc(fetch_status["llm_label"])}</span>'
             f'</div>'
         )
     else:
@@ -443,7 +461,7 @@ def main():
         with open(YOUTUBE_JSON, encoding="utf-8") as f:
             youtube_data = json.load(f)
 
-    fetch_status = compute_fetch_status(twitter_data, youtube_data)
+    fetch_status = compute_fetch_status(twitter_data, youtube_data, schedule_data)
     html = generate(schedule_data, twitter_data, fetch_status)
 
     with open(OUTPUT_HTML, "w", encoding="utf-8") as f:

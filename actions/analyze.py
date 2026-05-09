@@ -253,6 +253,7 @@ def main():
     )
 
     print("Cerebras解析中...")
+    llm_status = "ok"
     try:
         result_text = llm_analyze(prompt)
         try:
@@ -261,6 +262,11 @@ def main():
             result_text = result_text.strip().removeprefix("```json").removesuffix("```").strip()
             result = json.loads(result_text)
     except Exception as e:
+        msg = str(e)
+        # "Cerebras API error 429: ..." → "fallback:429"
+        import re as _re
+        m = _re.search(r"error (\d+)", msg)
+        llm_status = f"fallback:{m.group(1)}" if m else "fallback"
         print(f"LLM失敗、YouTubeのみでフォールバック: {e}")
         result = youtube_to_streams(youtube)
 
@@ -268,6 +274,7 @@ def main():
 
     output = {
         "analyzed_at": datetime.now(timezone.utc).isoformat(),
+        "llm_status": llm_status,
         "schedule": result,
     }
 
