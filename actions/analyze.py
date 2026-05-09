@@ -192,24 +192,70 @@ def parse_stream_dt(dt_str: str | None) -> datetime | None:
         return None
 
 
-def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
-    """前回のschedule.jsonから未来の配信を引き継ぎ、新規結果とマージする"""
-    if not os.path.exists(OUTPUT_JSON):
-        return new_schedule
-    try:
-        with open(OUTPUT_JSON, encoding="utf-8") as f:
-            prev = json.load(f).get("schedule", {})
-    except Exception:
-        return new_schedule
-
-    # YouTube で現在 live な動画 URL セット
+def _build_yt_url_sets(youtube_data: dict | None) -> tuple[set[str], set[str]]:
+    """YouTube データから live/upcoming の URL セットを返す"""
     live_urls: set[str] = set()
-    if youtube_data:
-        for ch in youtube_data.get("channels", {}).values():
-            for v in ch.get("videos", []):
-                if v.get("status") == "live" and v.get("url"):
-                    live_urls.add(v["url"])
+    upcoming_urls: set[str] = set()
+    if not youtube_data:
+        return live_urls, upcoming_urls
+    for ch in youtube_data.get("channels", {}).values():
+        for v in ch.get("videos", []):
+            url = v.get("url")
+            if not url:
+                continue
+            if v.get("status") == "live":
+                live_urls.add(url)
+            elif v.get("status") == "upcoming":
+                upcoming_urls.add(url)
+    return live_urls, upcoming_urls
 
+
+def _should_show(stream: dict, live_urls: set, upcoming_urls: set, now: datetime) -> bool:
+    """フローチャートに基づき表示すべきかを返す"""
+    url = stream.get("stream_url")
+    if url and url in live_urls:
+        return True
+    if url and url in upcoming_urls:
+        return True
+    # YouTube = none → start_dt で判断
+    dt = parse_stream_dt(stream.get("start_datetime"))
+    if dt and dt < now:
+        return False
+    if dt and dt >= now:
+        return True
+    # start_dt = null → Twitter あり（source に twitter を含む）なら表示
+    return stream.get("source") in ("twitter", "both")
+
+
+def _normalize_source(stream: dict, live_urls: set, upcoming_urls: set) -> dict:
+    """YouTube status と既存 source を元に source フィールドを正規化する"""
+    url = stream.get("stream_url")
+    yt_active = bool(url and (url in live_urls or url in upcoming_urls))
+    tw_active = stream.get("source") in ("twitter", "both")
+    if yt_active and tw_active:
+        new_source = "both"
+    elif yt_active:
+        new_source = "youtube"
+    elif tw_active:
+        new_source = "twitter"
+    else:
+        new_source = stream.get("source")
+    if new_source == stream.get("source"):
+        return stream
+    return {**stream, "source": new_source}
+
+
+def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
+    """前回のschedule.jsonから配信を引き継ぎ、新規結果とマージする"""
+    prev: dict = {}
+    if os.path.exists(OUTPUT_JSON):
+        try:
+            with open(OUTPUT_JSON, encoding="utf-8") as f:
+                prev = json.load(f).get("schedule", {})
+        except Exception:
+            pass
+
+    live_urls, upcoming_urls = _build_yt_url_sets(youtube_data)
     now = datetime.now(JST)
     _far_future = datetime(9999, 12, 31, 23, 59, tzinfo=JST)
 
@@ -221,6 +267,7 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
         new_urls = {s["stream_url"] for s in new_streams if s.get("stream_url")}
         new_dts  = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
 
+        # 前回エントリのうち新規結果にないものを carry-forward
         extra = []
         for s in prev_streams:
             url    = s.get("stream_url")
@@ -229,16 +276,13 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
                 continue
             if not url and dt_str and dt_str in new_dts:
                 continue
-            dt = parse_stream_dt(dt_str)
-            # 開始時刻が過去でも配信中なら残す
-            if dt and dt < now and url not in live_urls:
-                continue
-            # YouTube live で確認済みなら source を both に更新
-            if url in live_urls and s.get("source") != "both":
-                s = {**s, "source": "both"}
-            extra.append(s)
+            if _should_show(s, live_urls, upcoming_urls, now):
+                extra.append(_normalize_source(s, live_urls, upcoming_urls))
 
-        all_streams = new_streams + extra
+        # 新規エントリも source 正規化
+        normalized_new = [_normalize_source(s, live_urls, upcoming_urls) for s in new_streams]
+
+        all_streams = normalized_new + extra
         all_streams.sort(key=lambda s: parse_stream_dt(s.get("start_datetime")) or _far_future)
         merged[sn] = {"streams": all_streams}
 
