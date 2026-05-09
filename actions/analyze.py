@@ -178,6 +178,61 @@ def normalize_twitter(accounts: dict) -> dict:
     return normalized
 
 
+def parse_stream_dt(dt_str: str | None) -> datetime | None:
+    """MM/DD HH:MM → JST datetime。年またぎを考慮"""
+    if not dt_str:
+        return None
+    now = datetime.now(JST)
+    try:
+        dt = datetime.strptime(f"{now.year}/{dt_str}", "%Y/%m/%d %H:%M").replace(tzinfo=JST)
+        if dt < now - timedelta(days=180):
+            dt = dt.replace(year=now.year + 1)
+        return dt
+    except ValueError:
+        return None
+
+
+def merge_with_previous(new_schedule: dict) -> dict:
+    """前回のschedule.jsonから未来の配信を引き継ぎ、新規結果とマージする"""
+    if not os.path.exists(OUTPUT_JSON):
+        return new_schedule
+    try:
+        with open(OUTPUT_JSON, encoding="utf-8") as f:
+            prev = json.load(f).get("schedule", {})
+    except Exception:
+        return new_schedule
+
+    now = datetime.now(JST)
+    _far_future = datetime(9999, 12, 31, 23, 59, tzinfo=JST)
+
+    merged = {}
+    for sn in set(list(new_schedule.keys()) + list(prev.keys())):
+        new_streams = new_schedule.get(sn, {}).get("streams", [])
+        prev_streams = prev.get(sn, {}).get("streams", [])
+
+        new_urls = {s["stream_url"] for s in new_streams if s.get("stream_url")}
+        new_dts  = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
+
+        extra = []
+        for s in prev_streams:
+            url    = s.get("stream_url")
+            dt_str = s.get("start_datetime")
+            if url and url in new_urls:
+                continue
+            if not url and dt_str and dt_str in new_dts:
+                continue
+            dt = parse_stream_dt(dt_str)
+            if dt and dt < now:
+                continue
+            extra.append(s)
+
+        all_streams = new_streams + extra
+        all_streams.sort(key=lambda s: parse_stream_dt(s.get("start_datetime")) or _far_future)
+        merged[sn] = {"streams": all_streams}
+
+    return merged
+
+
 def main():
     twitter = load_twitter()
     with open(YOUTUBE_JSON, encoding="utf-8") as f:
@@ -208,6 +263,8 @@ def main():
     except Exception as e:
         print(f"LLM失敗、YouTubeのみでフォールバック: {e}")
         result = youtube_to_streams(youtube)
+
+    result = merge_with_previous(result)
 
     output = {
         "analyzed_at": datetime.now(timezone.utc).isoformat(),
