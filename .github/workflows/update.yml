@@ -1,8 +1,9 @@
 name: Update Stream Schedule
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"   # 30分ごと
+  push:
+    branches:
+      - data
   workflow_dispatch:           # 手動実行
 
 permissions:
