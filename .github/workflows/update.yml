@@ -57,5 +57,5 @@ jobs:
         run: |
           mkdir -p dist
           cp actions/index.html dist/
-          npx wrangler pages project create vt-scheduler 2>/dev/null || true
+          npx wrangler pages project create vt-scheduler --production-branch=main || true
           npx wrangler pages deploy dist/ --project-name=vt-scheduler --commit-dirty=true
