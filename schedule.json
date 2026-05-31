@@ -1,0 +1,51 @@
+{
+  "analyzed_at": "2026-05-31T11:00:06.296704+00:00",
+  "llm_status": "fallback:404",
+  "schedule": {
+    "UCWQtYtq9EOB4-I5P-3fh8lA": {
+      "streams": []
+    },
+    "UCt30jJgChL8qeT9VPadidSw": {
+      "streams": []
+    },
+    "momosuzunene": {
+      "streams": [
+        {
+          "start_datetime": "05/31 19:00",
+          "title": "【 #ねぽらぼ  】重大告知あり！ねぽらぼで考えるホロメン妹にするならTier表！【 桃鈴ねね / hololive 】",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "youtube",
+          "stream_url": "https://www.youtube.com/watch?v=7yKJyWaFKUQ",
+          "is_live": true
+        },
+        {
+          "start_datetime": null,
+          "title": "目標は18時から19時に配信したいです！",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "twitter",
+          "stream_url": null
+        }
+      ]
+    },
+    "ui_shig": {
+      "streams": [
+        {
+          "start_datetime": null,
+          "title": "#名取さな の毒にも薬にもならないラジオ\n\n今夜26時からは #どくラジ \n今夜は #しぐれうい さんがゲストに登場……との噂\n\n真相は26時のどくラジで\n\nhttps://\nradiko.jp/share/?t=20260\n521260000&sid=QRR\n…\n\n #radiko #シェアラジコ #文化放送 #那須どうぶつ王国",
+          "stream_type": "guest",
+          "collab_note": "名取さなの番組『どくラジ』にゲスト出演",
+          "source": "twitter",
+          "stream_url": null
+        }
+      ]
+    },
+    "UCAWSyEs_Io8MtpY3m-zqILA": {
+      "streams": []
+    },
+    "otonosekanade": {
+      "streams": []
+    }
+  }
+}

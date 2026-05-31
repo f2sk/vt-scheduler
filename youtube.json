@@ -1,0 +1,26 @@
+{
+  "fetched_at": "2026-05-31T11:00:02.608028+00:00",
+  "channels": {
+    "UCWQtYtq9EOB4-I5P-3fh8lA": {
+      "name": "音乃瀬奏",
+      "videos": []
+    },
+    "UCAWSyEs_Io8MtpY3m-zqILA": {
+      "name": "桃鈴ねね",
+      "videos": [
+        {
+          "video_id": "7yKJyWaFKUQ",
+          "title": "【 #ねぽらぼ  】重大告知あり！ねぽらぼで考えるホロメン妹にするならTier表！【 桃鈴ねね / hololive 】",
+          "status": "live",
+          "scheduled_start": "2026-05-31T10:00:00Z",
+          "url": "https://www.youtube.com/watch?v=7yKJyWaFKUQ"
+        }
+      ]
+    },
+    "UCt30jJgChL8qeT9VPadidSw": {
+      "name": "しぐれうい",
+      "videos": []
+    }
+  },
+  "ended_urls": []
+}
