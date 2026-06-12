@@ -6,6 +6,7 @@
 # 出力: schedule.json
 
 import os
+import re
 import json
 import urllib.request
 import urllib.error
@@ -13,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 
 CEREBRAS_API_KEY = os.environ["CEREBRAS_API_KEY"]
 CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
-CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507"
+CEREBRAS_MODEL = "gpt-oss-120b"
 
 BASE_DIR = os.path.dirname(__file__)
 TWITTER_JSON = os.path.join(BASE_DIR, "twitter.json")
@@ -26,7 +27,7 @@ JST = timezone(timedelta(hours=9))
 
 # channel_id → screen_name マッピング（fetch_youtube.py の TARGETS と対応）
 CHANNEL_SCREEN_NAMES = {
-    "UCZlDXzGoo7d44bwdNObFacg": "otonosekanade",
+    "UCWQtYtq9EOB4-I5P-3fh8lA": "otonosekanade",
     "UCAWSyEs_Io8MtpY3m-zqILA": "momosuzunene",
     "UCt30jJgChL8qeT9VPadidSw": "ui_shig",
 }
@@ -38,10 +39,10 @@ PROMPT_TEMPLATE = """\
 # 現在日時（JST）
 {current_datetime}
 
-# 分析対象VTuber（括弧内が各自のYouTubeチャンネルURL）
-- 音乃瀬奏 (@otonosekanade) https://www.youtube.com/channel/UCZlDXzGoo7d44bwdNObFacg
-- 桃鈴ねね (@momosuzunene) https://www.youtube.com/channel/UCAWSyEs_Io8MtpY3m-zqILA
-- しぐれうい (@ui_shig) https://www.youtube.com/channel/UCt30jJgChL8qeT9VPadidSw
+# 分析対象VTuber（括弧内がYouTubeチャンネルID）
+- 音乃瀬奏 (@otonosekanade, channel_id: UCWQtYtq9EOB4-I5P-3fh8lA)
+- 桃鈴ねね (@momosuzunene, channel_id: UCAWSyEs_Io8MtpY3m-zqILA)
+- しぐれうい (@ui_shig, channel_id: UCt30jJgChL8qeT9VPadidSw)
 
 # Twitterデータ
 {twitter_data}
@@ -61,7 +62,7 @@ PROMPT_TEMPLATE = """\
         "stream_type": "solo" / "collab" / "guest",
         "collab_note": "コラボ相手・他枠出演の説明" または null,
         "source": "twitter" / "youtube" / "both",
-        "stream_url": "配信URL（YouTubeのURL優先、なければツイート内のURL）" または null
+        "video_id": "YouTubeのvideo_id（11文字）" または null
       }}
     ]
   }},
@@ -73,24 +74,80 @@ PROMPT_TEMPLATE = """\
 # 判定ルール
 - streams: 現在時刻の前後72時間以内に存在する配信をすべて列挙する（過去・未来を問わない、複数あればすべて含める）
 - streams配列はstart_datetimeの昇順（早い順）で並べる
-- start_datetime: 日本時間（JST）でMM/DD HH:MM形式（例: 05/07 21:00）。不明な場合はnull
+- start_datetime: 日本時間（JST）でMM/DD HH:MM形式（例: 05/07 21:00）。日付と時刻の両方が明示されている場合のみ設定する。時刻のみ（例:「21時から」）や日付のみの場合はnull
 - stream_type: 以下の3値で判定する
   - "solo"  : 自分の枠で一人で配信
   - "collab": 自分の枠で他者と共同配信
   - "guest" : 他者の枠に出演（RTや引用RTによる他枠告知も含む）
-  - 判定補助: stream_urlのYouTubeチャンネルが当該VTuberのチャンネルでない場合は"guest"とする
+  - 判定補助: YouTubeデータのchannel_idが当該VTuberのchannel_idでない場合は"guest"とする
   - 判定補助: RTおよび引用RTは原則"guest"とする。ただし自分の枠を告知していると明らかな場合を除く
   - 注意: YouTubeデータに含まれる動画は自身のチャンネルとは限らない（メンバー限定プレイリスト経由で他者の枠が含まれる場合がある）。動画タイトルや配信者名から判断すること
 - YouTubeのlive/upcomingがあればそれを優先し、Twitterで補完する
 - titleはYouTubeデータのtitleフィールドをそのまま使う。YouTubeにない場合はツイート本文から配信タイトル部分を抜き出す
-- stream_urlはYouTubeのurlフィールドを優先し、なければツイート本文中のURLを使う
-- stream_urlは改行・空白を含まない1行のURLとして出力すること
+- video_id: 必ずYouTubeデータのvideo_idフィールド、またはツイートのvideo_idsリストに実際に存在するIDのみを使うこと。URLから自分で抽出・推測・生成することは禁止。該当するIDが存在しない場合は必ずnull
 - フリーチャット枠（Free chat）は配信予定としてカウントしない
 - titleを要約・翻訳・改変しないこと
 - 配信が検出されない場合はstreams配列を空にする
 
 JSON以外のテキストは出力しないでください。
 """
+
+
+def extract_video_id(url: str | None) -> str | None:
+    """YouTube URL から video_id（11文字）を抽出する"""
+    if not url:
+        return None
+    m = re.search(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', url)
+    return m.group(1) if m else None
+
+
+def video_id_to_url(vid: str | None) -> str | None:
+    if not vid:
+        return None
+    return f"https://www.youtube.com/watch?v={vid}"
+
+
+def prep_youtube_for_llm(youtube: dict) -> dict:
+    """youtube.jsonからURLを除去してvideo_idのみ残す"""
+    channels = {}
+    for channel_id, ch in youtube.get("channels", {}).items():
+        videos = []
+        for v in ch.get("videos", []):
+            videos.append({k: val for k, val in v.items() if k != "url"})
+        channels[channel_id] = {**ch, "videos": videos}
+    return channels
+
+
+def prep_twitter_for_llm(accounts: dict) -> dict:
+    """ツイートテキスト内のYouTube URLをvideo_idsリストとして付与する"""
+    result = {}
+    for sn, acct in accounts.items():
+        tweets = []
+        for t in acct.get("tweets", []):
+            text = t.get("text", "")
+            vids = list(dict.fromkeys(
+                m for m in re.findall(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', text)
+            ))
+            entry = dict(t)
+            if vids:
+                entry["video_ids"] = vids
+            tweets.append(entry)
+        result[sn] = {**acct, "tweets": tweets}
+    return result
+
+
+def apply_video_ids(result: dict) -> dict:
+    """LLM出力のvideo_id → stream_url に変換する"""
+    converted = {}
+    for sn, info in result.items():
+        streams = []
+        for s in info.get("streams", []):
+            vid = s.get("video_id")
+            stream = {k: v for k, v in s.items() if k != "video_id"}
+            stream["stream_url"] = video_id_to_url(vid)
+            streams.append(stream)
+        converted[sn] = {"streams": streams}
+    return converted
 
 
 def llm_analyze(prompt: str) -> str:
@@ -141,7 +198,7 @@ def youtube_to_streams(youtube: dict) -> dict:
                 "stream_type": "solo",
                 "collab_note": None,
                 "source": "youtube",
-                "stream_url": v.get("url"),
+                "stream_url": video_id_to_url(v.get("video_id")),
             })
         result[screen_name]["streams"] = streams
     return result
@@ -153,7 +210,6 @@ def load_twitter() -> dict:
     with open(TWITTER_JSON, encoding="utf-8") as f:
         data = json.load(f)
 
-    # 古いデータはスキップ
     fetched_at = datetime.fromisoformat(data.get("fetched_at", "2000-01-01T00:00:00+00:00"))
     age_hours = (datetime.now(timezone.utc) - fetched_at).total_seconds() / 3600
     if age_hours > TWITTER_MAX_AGE_HOURS:
@@ -184,15 +240,6 @@ def normalize_twitter(accounts: dict) -> dict:
     return normalized
 
 
-def extract_video_id(url: str | None) -> str | None:
-    """YouTube URL から video_id（11文字）を抽出する"""
-    if not url:
-        return None
-    import re as _re
-    m = _re.search(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', url)
-    return m.group(1) if m else None
-
-
 def parse_stream_dt(dt_str: str | None) -> datetime | None:
     """MM/DD HH:MM → JST datetime。年またぎを考慮"""
     if not dt_str:
@@ -216,7 +263,7 @@ def _build_yt_url_sets(youtube_data: dict | None) -> tuple[set[str], set[str], s
         return live_urls, upcoming_urls, ended_urls
     for ch in youtube_data.get("channels", {}).values():
         for v in ch.get("videos", []):
-            url = v.get("url")
+            url = video_id_to_url(v.get("video_id"))
             if not url:
                 continue
             if v.get("status") == "live":
@@ -229,21 +276,17 @@ def _build_yt_url_sets(youtube_data: dict | None) -> tuple[set[str], set[str], s
 def _should_show(stream: dict, live_urls: set, upcoming_urls: set, ended_urls: set, now: datetime) -> bool:
     """フローチャートに基づき表示すべきかを返す"""
     url = stream.get("stream_url")
-    # 確認済み終了は即非表示（5時間ガード無視）
     if url and url in ended_urls:
         return False
     if url and url in live_urls:
         return True
     if url and url in upcoming_urls:
         return True
-    # YouTube = none → start_dt で判断
     dt = parse_stream_dt(stream.get("start_datetime"))
     if dt and dt >= now:
         return True
     if dt and dt < now:
-        # 直近5時間以内はガード（YouTube API が一時的に返さないケースへの保護）
         return now - dt <= timedelta(hours=5)
-    # start_dt = null → Twitter あり（source に twitter を含む）なら表示
     return stream.get("source") in ("twitter", "both")
 
 
@@ -264,9 +307,9 @@ def _normalize_source(stream: dict, live_urls: set, upcoming_urls: set) -> dict:
     updated = dict(stream)
     if new_source != stream.get("source"):
         updated["source"] = new_source
-    if is_live != stream.get("is_live", False):
-        updated["is_live"] = is_live
-    elif not is_live and "is_live" in updated:
+    if is_live:
+        updated["is_live"] = True
+    elif "is_live" in updated:
         del updated["is_live"]
     return updated if updated != stream else stream
 
@@ -290,33 +333,23 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
         new_streams = new_schedule.get(sn, {}).get("streams", [])
         prev_streams = prev.get(sn, {}).get("streams", [])
 
-        def _norm_url(u):
-            return u.strip() if u else u
+        # 新規エントリのvideo_id・日時セット（重複判定用）
+        new_vids = {extract_video_id(s.get("stream_url")) for s in new_streams} - {None}
+        new_dts  = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
 
-        new_urls  = {_norm_url(s["stream_url"]) for s in new_streams if s.get("stream_url")}
-        new_vids  = {extract_video_id(s.get("stream_url")) for s in new_streams} - {None}
-        new_dts   = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
-
-        # 前回エントリのうち新規結果にないものを carry-forward
+        # 前回エントリのうち新規結果と重複しないものを carry-forward
         extra = []
         for s in prev_streams:
-            url    = _norm_url(s.get("stream_url"))
-            dt_str = s.get("start_datetime")
-            vid    = extract_video_id(url)
-            # URL完全一致 or video_id一致 でデデュープ
-            if url and url in new_urls:
-                continue
+            url = s.get("stream_url")
+            vid = extract_video_id(url)
             if vid and vid in new_vids:
                 continue
-            if not url and dt_str and dt_str in new_dts:
+            if not vid and s.get("start_datetime") in new_dts:
                 continue
             if _should_show(s, live_urls, upcoming_urls, ended_urls, now):
-                # URL正規化（改行混入対策）とsource正規化
-                if url != s.get("stream_url"):
-                    s = {**s, "stream_url": url}
                 extra.append(_normalize_source(s, live_urls, upcoming_urls))
 
-        # 新規エントリも source 正規化 / video_id重複除去
+        # 新規エントリのsource正規化・video_id重複除去
         seen_vids: set[str] = set()
         normalized_new = []
         for s in new_streams:
@@ -339,13 +372,15 @@ def main():
     with open(YOUTUBE_JSON, encoding="utf-8") as f:
         youtube = json.load(f)
 
-    # プロンプト用にデータを整形（重複行を圧縮）
+    # LLMに渡すデータを前処理
     twitter_normalized = normalize_twitter(twitter) if twitter else {}
-    twitter_text = json.dumps(twitter_normalized, ensure_ascii=False, indent=2) if twitter_normalized else "（データなし）"
-    youtube_text = json.dumps(youtube.get("channels", {}), ensure_ascii=False, indent=2)
+    twitter_prepped = prep_twitter_for_llm(twitter_normalized) if twitter_normalized else {}
+    youtube_prepped = prep_youtube_for_llm(youtube)
 
-    jst = timezone(timedelta(hours=9))
-    current_datetime = datetime.now(jst).strftime("%Y/%m/%d %H:%M JST")
+    twitter_text = json.dumps(twitter_prepped, ensure_ascii=False, indent=2) if twitter_prepped else "（データなし）"
+    youtube_text = json.dumps(youtube_prepped, ensure_ascii=False, indent=2)
+
+    current_datetime = datetime.now(JST).strftime("%Y/%m/%d %H:%M JST")
 
     prompt = PROMPT_TEMPLATE.format(
         current_datetime=current_datetime,
@@ -362,11 +397,11 @@ def main():
         except json.JSONDecodeError:
             result_text = result_text.strip().removeprefix("```json").removesuffix("```").strip()
             result = json.loads(result_text)
+        # video_id → stream_url に変換
+        result = apply_video_ids(result)
     except Exception as e:
         msg = str(e)
-        # "Cerebras API error 429: ..." → "fallback:429"
-        import re as _re
-        m = _re.search(r"error (\d+)", msg)
+        m = re.search(r"error (\d+)", msg)
         llm_status = f"fallback:{m.group(1)}" if m else "fallback"
         print(f"LLM失敗、YouTubeのみでフォールバック: {e}")
         result = youtube_to_streams(youtube)
