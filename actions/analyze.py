@@ -1,4 +1,4 @@
-# Cerebras APIでTwitter・YouTubeのデータを解析して配信情報を構造化するスクリプト
+﻿# Cerebras APIでTwitter・YouTubeのデータを解析して配信情報を構造化するスクリプト
 # GitHub Actionsから実行する
 # 実行方法: python3 analyze.py
 # 環境変数: CEREBRAS_API_KEY
@@ -74,7 +74,7 @@ PROMPT_TEMPLATE = """\
 # 判定ルール
 - streams: 現在時刻の前後72時間以内に存在する配信をすべて列挙する（過去・未来を問わない、複数あればすべて含める）
 - streams配列はstart_datetimeの昇順（早い順）で並べる
-- start_datetime: 日本時間（JST）でMM/DD HH:MM形式（例: 05/07 21:00）。日付と時刻の両方が明示されている場合のみ設定する。時刻のみ（例:「21時から」）や日付のみの場合はnull
+- start_datetime: 日本時間（JST）でMM/DD HH:MM形式（例: 05/07 21:00）。日時の解釈はツイートのdatetime_jstを基準にする。「今日」「時刻のみ（例: 21時）」はdatetime_jstの日付を使う。「明日」はその翌日。不明な場合はnull
 - stream_type: 以下の3値で判定する
   - "solo"  : 自分の枠で一人で配信
   - "collab": 自分の枠で他者と共同配信
@@ -119,18 +119,29 @@ def prep_youtube_for_llm(youtube: dict) -> dict:
 
 
 def prep_twitter_for_llm(accounts: dict) -> dict:
-    """ツイートテキスト内のYouTube URLをvideo_idsリストとして付与する"""
+    """ツイートテキスト内のYouTube URLをvideo_idsリストとして付与し、datetimeをJSTに変換する"""
     result = {}
     for sn, acct in accounts.items():
         tweets = []
         for t in acct.get("tweets", []):
             text = t.get("text", "")
+            # ツイート内でURLが改行で分割されるケースに対応するため空白を除去してから抽出
+            text_collapsed = re.sub(r'\s+', '', text)
             vids = list(dict.fromkeys(
-                m for m in re.findall(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', text)
+                m for m in re.findall(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', text_collapsed)
             ))
             entry = dict(t)
             if vids:
                 entry["video_ids"] = vids
+            # UTC datetimeをJSTに変換（「今日」等の相対日付解釈に使用）
+            raw_dt = t.get("datetime")
+            if raw_dt:
+                try:
+                    dt_utc = datetime.fromisoformat(raw_dt.replace("Z", "+00:00"))
+                    dt_jst = dt_utc.astimezone(JST)
+                    entry["datetime_jst"] = dt_jst.strftime("%Y-%m-%d %H:%M JST")
+                except Exception:
+                    pass
             tweets.append(entry)
         result[sn] = {**acct, "tweets": tweets}
     return result
