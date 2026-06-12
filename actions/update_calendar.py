@@ -1,4 +1,4 @@
-# Google CalendarにVTuberの配信予定を登録するスクリプト
+﻿# Google CalendarにVTuberの配信予定を登録するスクリプト
 # GitHub Actionsから実行する
 # 実行方法: python3 update_calendar.py
 # 環境変数: GOOGLE_CREDENTIALS_JSON (サービスアカウントのJSONキー文字列)
@@ -32,9 +32,22 @@ DISPLAY_NAMES = {
 EVENT_ID_PREFIX = "vtsch"
 
 
-def make_event_id(screen_name: str, start_datetime: str) -> str:
-    """スクリーン名＋配信開始日時から決定論的なイベントIDを生成"""
-    raw = f"{EVENT_ID_PREFIX}-{screen_name}-{start_datetime}"
+def extract_video_id(url: str | None) -> str | None:
+    """YouTube URL から video_id（11文字）を抽出する"""
+    if not url:
+        return None
+    import re
+    m = re.search(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', url)
+    return m.group(1) if m else None
+
+
+def make_event_id(screen_name: str, start_datetime: str, stream_url: str | None = None) -> str:
+    """イベントIDを生成。video_idがあればそれを優先し、なければstart_datetimeを使う"""
+    vid = extract_video_id(stream_url)
+    if vid:
+        raw = f"{EVENT_ID_PREFIX}-vid-{vid}"
+    else:
+        raw = f"{EVENT_ID_PREFIX}-{screen_name}-{start_datetime}"
     return hashlib.md5(raw.encode()).hexdigest()[:20]
 
 
@@ -113,7 +126,7 @@ def main():
                 print(f"  @{screen_name}: 日時パース失敗 ({start_dt_str})")
                 continue
 
-            event_id = make_event_id(screen_name, start_dt_str)
+            event_id = make_event_id(screen_name, start_dt_str, stream.get("stream_url"))
             event_body = build_event(screen_name, stream, start_dt)
 
             try:
