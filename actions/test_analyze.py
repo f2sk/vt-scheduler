@@ -78,6 +78,12 @@ class TestPrepTwitterForLlm:
         result = analyze.prep_twitter_for_llm(accounts)
         assert result["sn"]["tweets"][0]["video_ids"] == ["EgweCO4dIx4"]
 
+    def test_quoted_text_none(self):
+        """quoted_textがNoneでもエラーにならない"""
+        accounts = {"sn": {"tweets": [{"text": "テスト", "quoted_text": None}]}}
+        result = analyze.prep_twitter_for_llm(accounts)
+        assert "video_ids" not in result["sn"]["tweets"][0]
+
 
 # ── merge_with_previous ───────────────────────────────────────────────
 

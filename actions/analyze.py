@@ -124,8 +124,8 @@ def prep_twitter_for_llm(accounts: dict) -> dict:
     for sn, acct in accounts.items():
         tweets = []
         for t in acct.get("tweets", []):
-            text = t.get("text", "")
-            quoted = t.get("quoted_text", "")
+            text = t.get("text") or ""
+            quoted = t.get("quoted_text") or ""
             # text と quoted_text を結合し、改行分割URLに対応するため空白を除去してから抽出
             text_collapsed = re.sub(r'\s+', '', text + " " + quoted)
             vids = list(dict.fromkeys(
