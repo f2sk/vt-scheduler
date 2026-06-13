@@ -350,8 +350,12 @@ def merge_with_previous(new_schedule: dict, youtube_data: dict = None) -> dict:
         new_dts  = {s["start_datetime"] for s in new_streams if s.get("start_datetime")}
 
         # 前回エントリのうち新規結果と重複しないものを carry-forward
+        # ただし source:twitter + start_datetime:null のエントリは引き継がない
+        # （現在のツイートから再生成されるべき情報であり、引き継ぐと無限蓄積になる）
         extra = []
         for s in prev_streams:
+            if s.get("source") == "twitter" and not s.get("start_datetime"):
+                continue
             url = s.get("stream_url")
             vid = extract_video_id(url)
             if vid and vid in new_vids:

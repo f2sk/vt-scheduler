@@ -79,6 +79,61 @@ class TestPrepTwitterForLlm:
         assert result["sn"]["tweets"][0]["video_ids"] == ["EgweCO4dIx4"]
 
 
+# ── merge_with_previous ───────────────────────────────────────────────
+
+class TestMergeCarryForward:
+
+    def _make_schedule(self, streams):
+        return {"sn": {"streams": streams}}
+
+    def test_twitter_only_null_datetime_not_carried_forward(self):
+        """source:twitter + start_datetime:null のエントリはcarry-forwardしない"""
+        stale = {
+            "start_datetime": None,
+            "title": "古いTwitter告知",
+            "stream_type": "solo",
+            "source": "twitter",
+            "stream_url": None,
+        }
+        # 前回のschedule.jsonにstaleエントリ、今回のLLM結果は空
+        import tempfile, os, json
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
+            json.dump({"schedule": {"sn": {"streams": [stale]}}}, f)
+            tmp = f.name
+        orig = analyze.OUTPUT_JSON
+        analyze.OUTPUT_JSON = tmp
+        try:
+            result = analyze.merge_with_previous({"sn": {"streams": []}})
+        finally:
+            analyze.OUTPUT_JSON = orig
+            os.unlink(tmp)
+        assert result["sn"]["streams"] == []
+
+    def test_youtube_entry_still_carried_forward(self):
+        """有効なstream_urlがあるエントリは通常通りcarry-forwardされる"""
+        from datetime import datetime, timezone, timedelta
+        future = (datetime.now(timezone(timedelta(hours=9))) + timedelta(hours=2)).strftime("%m/%d %H:%M")
+        entry = {
+            "start_datetime": future,
+            "title": "未来の配信",
+            "stream_type": "solo",
+            "source": "youtube",
+            "stream_url": "https://www.youtube.com/watch?v=EgweCO4dIx4",
+        }
+        import tempfile, os, json
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
+            json.dump({"schedule": {"sn": {"streams": [entry]}}}, f)
+            tmp = f.name
+        orig = analyze.OUTPUT_JSON
+        analyze.OUTPUT_JSON = tmp
+        try:
+            result = analyze.merge_with_previous({"sn": {"streams": []}})
+        finally:
+            analyze.OUTPUT_JSON = orig
+            os.unlink(tmp)
+        assert len(result["sn"]["streams"]) == 1
+
+
 # ── extract_video_id ──────────────────────────────────────────────────
 
 class TestExtractVideoId:
