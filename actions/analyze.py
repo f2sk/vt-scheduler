@@ -125,8 +125,9 @@ def prep_twitter_for_llm(accounts: dict) -> dict:
         tweets = []
         for t in acct.get("tweets", []):
             text = t.get("text", "")
-            # ツイート内でURLが改行で分割されるケースに対応するため空白を除去してから抽出
-            text_collapsed = re.sub(r'\s+', '', text)
+            quoted = t.get("quoted_text", "")
+            # text と quoted_text を結合し、改行分割URLに対応するため空白を除去してから抽出
+            text_collapsed = re.sub(r'\s+', '', text + " " + quoted)
             vids = list(dict.fromkeys(
                 m for m in re.findall(r'(?:v=|live/|youtu\.be/)([A-Za-z0-9_-]{11})', text_collapsed)
             ))

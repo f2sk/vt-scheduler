@@ -71,6 +71,13 @@ class TestPrepTwitterForLlm:
         result = analyze.prep_twitter_for_llm(accounts)
         assert "datetime_jst" not in result["sn"]["tweets"][0]
 
+    def test_video_id_from_quoted_text(self):
+        """quoted_text内の改行分割URLからもvideo_idを抽出できる"""
+        quoted = "待機所\nhttps://\nyoutube.com/live/EgweCO4dI\nx4?si=xxx"
+        accounts = {"sn": {"tweets": [{"text": "このあとすぐ！", "quoted_text": quoted}]}}
+        result = analyze.prep_twitter_for_llm(accounts)
+        assert result["sn"]["tweets"][0]["video_ids"] == ["EgweCO4dIx4"]
+
 
 # ── extract_video_id ──────────────────────────────────────────────────
 
