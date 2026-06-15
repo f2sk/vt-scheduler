@@ -1,0 +1,33 @@
+{
+  "fetched_at": "2026-06-15T09:10:02.463482+00:00",
+  "channels": {
+    "UCWQtYtq9EOB4-I5P-3fh8lA": {
+      "name": "音乃瀬奏",
+      "videos": [
+        {
+          "video_id": "h0jykfxgmj0",
+          "title": "【 3DLIVE 】Step Into Dreams【水宮枢／ホロライブDEV_IS】#水宮枢生誕祭2026",
+          "status": "upcoming",
+          "scheduled_start": "2026-06-16T12:00:00Z",
+          "url": "https://www.youtube.com/watch?v=h0jykfxgmj0"
+        },
+        {
+          "video_id": "QpYSkEMJeTM",
+          "title": "【 #ホロドリゲーム企画 】お姉さんVSお子さま！？ #ホロドリ エンジョイゲーム大会！！",
+          "status": "upcoming",
+          "scheduled_start": "2026-06-15T12:00:00Z",
+          "url": "https://www.youtube.com/watch?v=QpYSkEMJeTM"
+        }
+      ]
+    },
+    "UCAWSyEs_Io8MtpY3m-zqILA": {
+      "name": "桃鈴ねね",
+      "videos": []
+    },
+    "UCt30jJgChL8qeT9VPadidSw": {
+      "name": "しぐれうい",
+      "videos": []
+    }
+  },
+  "ended_urls": []
+}

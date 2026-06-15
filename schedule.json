@@ -1,0 +1,58 @@
+{
+  "analyzed_at": "2026-06-15T09:10:08.601219+00:00",
+  "llm_status": "ok",
+  "schedule": {
+    "otonosekanade": {
+      "streams": [
+        {
+          "start_datetime": "06/15 21:00",
+          "title": "【 #ホロドリゲーム企画 】お姉さんVSお子さま！？ #ホロドリ エンジョイゲーム大会！！",
+          "stream_type": "collab",
+          "collab_note": "お姉さんチーム vs お子さまチーム",
+          "source": "both",
+          "stream_url": "https://www.youtube.com/watch?v=QpYSkEMJeTM"
+        },
+        {
+          "start_datetime": "06/16 21:00",
+          "title": "【 3DLIVE 】Step Into Dreams【水宮枢／ホロライブDEV_IS】#水宮枢生誕祭2026",
+          "stream_type": "collab",
+          "collab_note": "水宮枢",
+          "source": "youtube",
+          "stream_url": "https://www.youtube.com/watch?v=h0jykfxgmj0"
+        }
+      ]
+    },
+    "ui_shig": {
+      "streams": [
+        {
+          "start_datetime": "06/14 22:00",
+          "title": "しぐれうい VS バニーガーデン2",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "twitter",
+          "stream_url": "https://www.youtube.com/watch?v=_IRNbLl9Fgs"
+        }
+      ]
+    },
+    "momosuzunene": {
+      "streams": [
+        {
+          "start_datetime": "06/15 06:30",
+          "title": "朝雑談",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "twitter",
+          "stream_url": "https://www.youtube.com/watch?v=2Z4a49Zhgh4"
+        },
+        {
+          "start_datetime": null,
+          "title": "1st Live 「花咲く＊ねねねねねねねね超開花！」",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "twitter",
+          "stream_url": null
+        }
+      ]
+    }
+  }
+}
