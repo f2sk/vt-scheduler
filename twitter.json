@@ -1,0 +1,47 @@
+{
+  "fetched_at": "2026-09-05T17:21:47.605925+00:00",
+  "accounts": {
+    "otonosekanade": {
+      "name": "音乃瀬奏",
+      "tweets": [
+        {
+          "datetime": "2026-09-05T14:13:56.000Z",
+          "text": "9月9日(水) 19:55\n\nちら見せ２👀",
+          "quoted_text": null,
+          "is_retweet": false,
+          "url": "https://x.com/otonosekanade/status/2096240417021046852"
+        },
+        {
+          "datetime": "2026-09-05T10:02:23.000Z",
+          "text": "ARKすうるぞい！\n\nhttps://\nyoutube.com/live/LCorMGn_K\nUw?feature=share\n…",
+          "quoted_text": null,
+          "is_retweet": false,
+          "url": "https://x.com/otonosekanade/status/2096177113594556660"
+        },
+        {
+          "datetime": "2026-09-05T09:58:16.000Z",
+          "text": "ギリギリお仕事から帰宅したのでARKするん！！！！！！",
+          "quoted_text": null,
+          "is_retweet": false,
+          "url": "https://x.com/otonosekanade/status/2096176076959736315"
+        }
+      ]
+    },
+    "momosuzunene": {
+      "name": "桃鈴ねね",
+      "tweets": []
+    },
+    "ui_shig": {
+      "name": "しぐれうい",
+      "tweets": [
+        {
+          "datetime": "2026-09-05T12:09:05.000Z",
+          "text": "しぐれういいいねベストワンツイートはこれでいいんですか？という感じですね",
+          "quoted_text": "海外勢が何を言ってるかわからないが笑いものにされていることだけはわかる x.com/diptipper/stat…",
+          "is_retweet": false,
+          "url": "https://x.com/ui_shig/status/2096208998647435650"
+        }
+      ]
+    }
+  }
+}
