@@ -1,0 +1,48 @@
+{
+  "fetched_at": "2026-09-07T04:51:29.411267+00:00",
+  "accounts": {
+    "otonosekanade": {
+      "name": "音乃瀬奏",
+      "tweets": [
+        {
+          "datetime": "2026-09-06T12:01:08.000Z",
+          "text": "はじまりますん～！\n\nhttps://\nyoutube.com/live/g924W6v9V\nv8?feature=share\n…",
+          "quoted_text": null,
+          "is_retweet": false,
+          "url": "https://x.com/otonosekanade/status/2096569384340947131"
+        }
+      ]
+    },
+    "momosuzunene": {
+      "name": "桃鈴ねね",
+      "tweets": [
+        {
+          "datetime": "2026-09-06T13:57:08.000Z",
+          "text": "ねねぽる？！？！ホロドリさんありがとう",
+          "quoted_text": "/／ \n #ホロドリ 300万ダウンロード突破！🏰🎶\n\\＼ \n\nいつもたくさん遊んでいただき、本当にありがとうございます！✨\n\n300万ダウンロード突破を記念して、\n「ガチャチケット×10」をプレゼント🎁 \n\n9/8(火)11:00にゲーム内のギフトへ配布予定🙌",
+          "is_retweet": false,
+          "url": "https://x.com/momosuzunene/status/2096598576629784723"
+        },
+        {
+          "datetime": "2026-09-06T13:03:56.000Z",
+          "text": "明日復活...",
+          "quoted_text": null,
+          "is_retweet": false,
+          "url": "https://x.com/momosuzunene/status/2096585190294622397"
+        }
+      ]
+    },
+    "ui_shig": {
+      "name": "しぐれうい",
+      "tweets": [
+        {
+          "datetime": "2026-09-06T12:38:41.000Z",
+          "text": "アイキューのカウントダウンラブをカバーさせていただきましたよ💞\n（さくなちゃんからご連絡いただいたとき、曲名みて即レスOKしました）\n\nなにとぞ〜〜〜！",
+          "quoted_text": "明日19:00~ プレミア公開✨️\n\n🌟💯🦂🎀🐾🍥🌂\n\nhttps://\nyoutu.be/wIprlx8F0M4?si\n=kgLbuTG2wN3l996h\n…",
+          "is_retweet": false,
+          "url": "https://x.com/ui_shig/status/2096578836590985694"
+        }
+      ]
+    }
+  }
+}
