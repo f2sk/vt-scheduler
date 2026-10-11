@@ -1,0 +1,42 @@
+{
+  "analyzed_at": "2026-10-11T03:10:05.906619+00:00",
+  "llm_status": "fallback:402",
+  "schedule": {
+    "ui_shig": {
+      "streams": []
+    },
+    "momosuzunene": {
+      "streams": [
+        {
+          "start_datetime": "10/11 11:30",
+          "title": "【 #ホロ鯖ARK 】自然で生きるスタイルねねち、参戦―★【 桃鈴ねね / hololive 】",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "youtube",
+          "stream_url": "https://www.youtube.com/watch?v=1VxtRtZOq54",
+          "is_live": true
+        }
+      ]
+    },
+    "otonosekanade": {
+      "streams": [
+        {
+          "start_datetime": "10/12 19:00",
+          "title": "【 #音乃瀬奏AcousticLive 】重大告知アリ！セルフ3D×ピアノ生演奏ライブ！【音乃瀬奏】#ReGLOSS",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "youtube",
+          "stream_url": "https://www.youtube.com/watch?v=QvUi6KG4FRI"
+        },
+        {
+          "start_datetime": "10/12 20:00",
+          "title": "音乃瀬奏 - ？？？ (Official MV)",
+          "stream_type": "solo",
+          "collab_note": null,
+          "source": "youtube",
+          "stream_url": "https://www.youtube.com/watch?v=LjuKylF4udw"
+        }
+      ]
+    }
+  }
+}

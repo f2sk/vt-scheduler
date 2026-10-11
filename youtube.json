@@ -1,0 +1,41 @@
+{
+  "fetched_at": "2026-10-11T03:10:02.304624+00:00",
+  "channels": {
+    "UCWQtYtq9EOB4-I5P-3fh8lA": {
+      "name": "音乃瀬奏",
+      "videos": [
+        {
+          "video_id": "QvUi6KG4FRI",
+          "title": "【 #音乃瀬奏AcousticLive 】重大告知アリ！セルフ3D×ピアノ生演奏ライブ！【音乃瀬奏】#ReGLOSS",
+          "status": "upcoming",
+          "scheduled_start": "2026-10-12T10:00:00Z",
+          "url": "https://www.youtube.com/watch?v=QvUi6KG4FRI"
+        },
+        {
+          "video_id": "LjuKylF4udw",
+          "title": "音乃瀬奏 - ？？？ (Official MV)",
+          "status": "upcoming",
+          "scheduled_start": "2026-10-12T11:00:00Z",
+          "url": "https://www.youtube.com/watch?v=LjuKylF4udw"
+        }
+      ]
+    },
+    "UCAWSyEs_Io8MtpY3m-zqILA": {
+      "name": "桃鈴ねね",
+      "videos": [
+        {
+          "video_id": "1VxtRtZOq54",
+          "title": "【 #ホロ鯖ARK 】自然で生きるスタイルねねち、参戦―★【 桃鈴ねね / hololive 】",
+          "status": "live",
+          "scheduled_start": "2026-10-11T02:30:00Z",
+          "url": "https://www.youtube.com/watch?v=1VxtRtZOq54"
+        }
+      ]
+    },
+    "UCt30jJgChL8qeT9VPadidSw": {
+      "name": "しぐれうい",
+      "videos": []
+    }
+  },
+  "ended_urls": []
+}
